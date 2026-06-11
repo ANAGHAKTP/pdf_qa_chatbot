@@ -137,7 +137,10 @@ def main():
     vectorstore = get_vector_store(pdf_path)
     
     # 3. Create Retriever
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
+    retriever = vectorstore.as_retriever(
+        search_type="mmr",
+        search_kwargs={"k": 6, "fetch_k": 20}
+    )
     
     # 4. Initialize LLM (gpt-4o-mini is fast, cost-efficient, and capable)
     llm = ChatNVIDIA(
