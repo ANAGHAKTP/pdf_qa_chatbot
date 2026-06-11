@@ -1,0 +1,19 @@
+# Environment variables
+.env
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# ChromaDB local storage
+chroma_db/
+
+# Git-ignored PDF files for testing (clean repo)
+*.pdf
+
+# Virtual environment (just in case they use one)
+.venv/
+venv/
+ENV/
+env/
