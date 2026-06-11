@@ -8,7 +8,6 @@ __pycache__/
 
 # ChromaDB local storage
 chroma_db/
-chroma_db_*
 chroma_db_*/
 
 # Git-ignored PDF files for testing (clean repo)

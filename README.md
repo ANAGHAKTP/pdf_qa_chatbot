@@ -76,6 +76,8 @@ streamlit run streamlit_app.py
 ```
 Open the URL shown in the terminal (usually `http://localhost:8501`). In the sidebar, paste your NVIDIA API key (if not already set in `.env`), drag & drop a PDF, and click **Process PDF** to start asking questions!
 
+![DocMind Interface](docmind_demo.png)
+
 ### Option 2: Run via CLI Chatbot
 1. **Place your PDF file** (e.g. `sample.pdf`, a research paper, manual, or your resume) directly into the root folder of this project.
 2. Run the application:
