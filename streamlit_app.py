@@ -427,27 +427,56 @@ with st.sidebar:
     )
 
     st.markdown('<div class="section-label">Document</div>', unsafe_allow_html=True)
-    uploaded_file = st.file_uploader(
-        "Upload PDF",
-        type=["pdf"],
-        label_visibility="collapsed"
-    )
+    import glob
+    local_pdfs = glob.glob("*.pdf")
+    
+    source_option = "Upload PDF"
+    selected_local_pdf = None
+    
+    if local_pdfs:
+        source_option = st.radio(
+            "Document Source",
+            ["Upload PDF", "Select Local PDF"],
+            label_visibility="collapsed"
+        )
+        
+    pdf_bytes = None
+    pdf_name = None
+    
+    if source_option == "Select Local PDF" and local_pdfs:
+        selected_local_pdf = st.selectbox(
+            "Choose a local PDF",
+            local_pdfs,
+            label_visibility="collapsed"
+        )
+        if selected_local_pdf:
+            with open(selected_local_pdf, "rb") as f:
+                pdf_bytes = f.read()
+            pdf_name = selected_local_pdf
+    else:
+        uploaded_file = st.file_uploader(
+            "Upload PDF",
+            type=["pdf"],
+            label_visibility="collapsed"
+        )
+        if uploaded_file:
+            pdf_bytes = uploaded_file.read()
+            pdf_name = uploaded_file.name
 
-    if uploaded_file and api_key_input:
+    if pdf_bytes and api_key_input:
         if st.button("⟳  Index document", use_container_width=True):
             with st.spinner("Embedding document…"):
                 try:
-                    pdf_bytes = uploaded_file.read()
-                    vs, n_chunks = build_vector_store(pdf_bytes, uploaded_file.name, api_key_input)
+                    vs, n_chunks = build_vector_store(pdf_bytes, pdf_name, api_key_input)
                     st.session_state.rag_chain = build_rag_chain(vs, api_key_input)
                     st.session_state.pdf_ready = True
-                    st.session_state.pdf_name = uploaded_file.name
+                    st.session_state.pdf_name = pdf_name
                     st.session_state.chunk_count = n_chunks
                     st.session_state.messages = []
                     st.success(f"Indexed {n_chunks} chunks")
                 except Exception as e:
                     st.error(str(e))
-    elif uploaded_file and not api_key_input:
+    elif pdf_bytes and not api_key_input:
         st.caption("↑ Enter your API key first")
 
     st.markdown('<div class="section-label">Status</div>', unsafe_allow_html=True)
