@@ -1,4 +1,4 @@
-# PDF Question Answering Chatbot 🤖📄
+# DOCMind 🤖📄
 
 > Ask anything from any PDF using modern Retrieval-Augmented Generation (RAG) powered by NVIDIA NIM endpoints and LangChain.
 
