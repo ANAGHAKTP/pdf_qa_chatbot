@@ -1,20 +1,92 @@
-# Environment variables
+# Environment variables and secrets
 .env
+.env.local
+.env.development.local
+.env.production.local
+.env.test.local
+backend/.env
+backend/.env.local
 
-# Python cache files
+# Node.js / Next.js (Frontend)
+node_modules/
+.next/
+out/
+dist/
+build/
+*.log
+
+# Python (Backend)
 __pycache__/
 *.py[cod]
+*.pyo
+*.pyd
 *$py.class
-
-# ChromaDB local storage
-chroma_db/
-chroma_db_*/
-
-# Git-ignored PDF files for testing (clean repo)
-*.pdf
-
-# Virtual environment (just in case they use one)
+*.egg-info/
+.eggs/
 .venv/
 venv/
-ENV/
 env/
+ENV/
+.python-version
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# SQLite databases
+*.sqlite
+*.sqlite3
+backend/*.db
+
+# Redis dumps
+dump.rdb
+
+# ChromaDB / Vector Store local persistence
+chroma_db/
+chroma_db_*/
+chromadb/
+chroma/
+backend/chroma_db/
+
+# Private uploads and private PDF directories
+uploads/
+backend/uploads/
+data/uploads/
+backend/data/uploads/
+private_documents/
+demo_documents/private/
+sample_documents/private/
+
+# Local pickle/binary indices
+*.pkl
+*.bin
+
+# Temporary folders
+tmp/
+temp/
+
+# IDE / Editor configurations
+.vscode/
+.idea/
+.history/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+
+# Operating System files
+.DS_Store
+.DS_Store?
+._*
+.AppleDouble
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Docker files
+*.pid
+docker-volumes/

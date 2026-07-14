@@ -1,0 +1,22 @@
+.git
+.gitignore
+.dockerignore
+README.md
+LICENSE
+.venv
+__pycache__
+*.db
+*.pkl
+data/
+
+# Frontend dependencies and builds
+frontend/node_modules
+frontend/.next
+frontend/out
+
+# Backend dependencies
+backend/.venv
+backend/__pycache__
+backend/tests
+backend/*.db
+backend/data

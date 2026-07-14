@@ -1,128 +1,101 @@
-# DOCMind 🤖📄
+# DOCMind Enterprise 🤖📄
 
-> Ask anything from any PDF using modern Retrieval-Augmented Generation (RAG) powered by NVIDIA NIM endpoints and LangChain.
+> A startup-grade, production-quality AI Document Intelligence Platform built with clean architecture using Next.js (App Router), FastAPI, PostgreSQL, Redis, ChromaDB, and NVIDIA NIM endpoints.
 
-This project is a CLI-based chatbot that allows you to load any PDF document, parse its content, build a local vector database, and ask natural language questions about it. It uses state-of-the-art LLMs (`meta/llama-3.1-8b-instruct`) and high-performance vector embeddings (`nvidia/nv-embedqa-e5-v5`) served via NVIDIA NIM to locate and answer from the context of your document.
+DOCMind Enterprise is a modular, high-performance RAG (Retrieval-Augmented Generation) document intelligence platform that allows enterprises to upload PDFs, manage directory structures, index contents automatically, ask conversational questions with live streaming sources/citations, and extract deep document analysis (executive summary, risks, deadlines, milestones, and entity maps) using cloud-hosted LLM endpoints.
 
 ---
 
 ## 🌟 Key Features
 
-- **NVIDIA NIM Integration**: Uses high-throughput, low-latency API models served directly by NVIDIA.
-- **Interactive Streamlit Web UI**: Built a beautiful, responsive web-based UI featuring dark mode styling, session state memory, custom status badges, and interactive chat elements.
-- **Modern LangChain Expression Language (LCEL)**: Built using the latest LangChain practices (`create_retrieval_chain` and `create_stuff_documents_chain`) to eliminate deprecation warnings.
-- **Smart PDF Selection**: Automatically scans the root directory for `.pdf` files in the CLI interface. If multiple files are found, it provides an interactive selection menu.
-- **Local Database Persistence**: ChromaDB is persisted locally (`./chroma_db_<pdf_name>`), meaning your PDF is only embedded *once*. Subsequent runs load instantly from disk! *(If you update your PDF and need to re-index it, simply delete the corresponding database folder to force a rebuild).*
-- **Zero-Configuration Prompting**: If your `NVIDIA_API_KEY` is not set, the app will securely prompt you for it on the first run and offer to save it in `.env` (which is safely git-ignored).
-- **Custom System Prompts**: Instructs the model to limit answers to the document context and avoid hallucinations.
+- **Advanced Retrieval-Augmented Generation (RAG) Pipeline**:
+  - **Multi-Query Expansion**: Rewrites user queries into alternative formulations to expand semantic coverage.
+  - **Hybrid Search**: Merges dense semantic embeddings (MMR Chroma vector store) with sparse keyword matching (BM25 file indexer).
+  - **Reciprocal Rank Fusion (RRF)**: Integrates dense and sparse results into a single rank list using standard weighting constants.
+  - **Cross-Encoder Re-ranking**: Re-evaluates retrieved chunks using a cross-encoder model to return the most relevant candidates.
+  - **Parent Document Retrieval**: Child chunks (400 characters) are mapped for high granularity, but full parent pages (page text context) are injected into the LLM context to prevent loss of information.
+- **Premium SaaS Frontend UI (Next.js, TypeScript, Tailwind CSS)**:
+  - Vercel-style dark glassmorphism design system.
+  - Interactive file explorer supporting nested folders, document checklists, renaming, and deletion.
+  - Streamlit-like conversational workspace featuring citations highlighting, query latency accordions, markdown rendering, code formatting, and suggestion prompts.
+  - Slide-out Document Intelligence sidebar displaying Executive Summary, Obligations, Deadlines, Risks, and Named Entities.
+- **Robust Observability**:
+  - Structured JSON logs for microservice log aggregators.
+  - Prometheus metrics scraper endpoint (`/metrics`) monitoring latencies, request rates, and token counts.
+- **Microservices Orchestration (Docker Compose)**:
+  - Spin up Next.js frontend, FastAPI backend, PostgreSQL, Redis, and ChromaDB with a single command.
 
 ---
 
-## 🛠️ Project Structure
+## 🛠️ Project Directory Tree
 
 ```text
 pdf_qa_chatbot/
-├── app.py               # Main CLI chatbot application
-├── streamlit_app.py     # Streamlit web application with custom UI
-├── requirements.txt     # Python dependency definition
-├── .env.example         # Template environment variables
-├── .gitignore           # File to ignore secrets, database folders, and PDFs
-└── README.md            # Project documentation and portfolio write-up
+├── backend/
+│   ├── app/
+│   │   ├── ai/             # Advanced RAG Pipeline (pipeline.py)
+│   │   ├── api/            # API Router endpoints (Auth, Documents, Chat, Admin)
+│   │   ├── core/           # Config settings, JWT operations, Prometheus metrics
+│   │   ├── db/             # SQLAlchemy schemas (models.py) and sessions
+│   │   ├── repositories/   # DB query abstraction (User, Document, Folder, Chat)
+│   │   └── services/       # Business logic layer (Auth, Chat, Document, Storage)
+│   ├── tests/              # pytest unit & integration test suites
+│   ├── Dockerfile
+│   └── requirements.txt
+├── frontend/
+│   ├── src/
+│   │   ├── app/            # Next.js pages, layouts, and global Tailwind CSS style
+│   │   ├── lib/            # Axios API fetching client with auto-refresh tokens
+│   │   └── types/          # TypeScript interfaces
+│   ├── Dockerfile
+│   └── package.json
+├── sample_documents/       # Tracked public sample documents for testing
+├── docker-compose.yml      # Multi-container cluster orchestration
+├── .gitignore              # Ignores runtime databases, local uploads, and secrets
+└── README.md
 ```
 
 ---
 
-## ⚙️ Installation & Setup
+## ⚙️ Installation & Run
 
 ### Prerequisites
-- Python 3.9 or higher
-- An NVIDIA NIM API Key ([Get a free key with 1000 credits here](https://build.nvidia.com))
+- Docker & Docker Compose
+- An NVIDIA NIM API Key (or OpenAI/Ollama settings override)
 
-### 1. Clone the Repository
+### 1. Configure Environment
+Copy the example environment settings to `.env` inside the `backend/` directory:
 ```bash
-git clone https://github.com/your-username/pdf_qa_chatbot.git
-cd pdf_qa_chatbot
+cp backend/.env.example backend/.env
 ```
-
-### 2. Install Dependencies
-Install the required packages using `requirements.txt`:
-```bash
-pip install -r requirements.txt
-```
-
-### 3. Set Up Environment Variables
-Copy the template `.env.example` file to `.env`:
-```bash
-# On Linux/macOS
-cp .env.example .env
-
-# On Windows (PowerShell/CMD)
-copy .env.example .env
-```
-Open `.env` and add your NVIDIA API Key:
+Open `backend/.env` and insert your API key:
 ```text
-NVIDIA_API_KEY=nvapi-your-actual-nvidia-key-here
+NVIDIA_API_KEY=nvapi-your-nvidia-key
 ```
-*(Alternatively, you can just run the application and it will prompt you to enter and save the API key automatically!)*
 
----
-
-## 🚀 How to Run
-
-### Option 1: Run via Streamlit Web UI
-To launch the chatbot in your web browser with a premium dark-themed interface:
+### 2. Launch with Docker Compose
+Run the entire platform on localhost:
 ```bash
-streamlit run streamlit_app.py
+docker-compose up --build
 ```
-Open the URL shown in the terminal (usually `http://localhost:8501`). In the sidebar, paste your NVIDIA API key (if not already set in `.env`), drag & drop a PDF, and click **Process PDF** to start asking questions!
 
-![DocMind Interface](docmind_demo.png)
+### 3. Localhost Endpoint Directory
 
-### Option 2: Run via CLI Chatbot
-1. **Place your PDF file** (e.g. `sample.pdf`, a research paper, manual, or your resume) directly into the root folder of this project.
-2. Run the application:
-   ```bash
-   python app.py
-   ```
-3. If multiple PDFs exist, select your file from the menu.
-4. Ask questions directly in the terminal! Type `exit` or `quit` to end the session.
-
-> [!TIP]
-> If you update your PDF file or want to force a clean re-indexing, delete the persisted database folder before running:
-> - **Windows**: `rmdir /s /q chroma_db_sample_pdf` (replace `sample_pdf` with your PDF's name)
-> - **macOS/Linux**: `rm -rf chroma_db_sample_pdf`
+Once running, access the services:
+- **Frontend Panel**: [http://localhost:3000](http://localhost:3000)
+- **FastAPI Backend Root**: [http://localhost:8000](http://localhost:8000)
+- **Interactive Swagger Docs**: [http://localhost:8000/docs](http://localhost:8000/docs)
+- **Prometheus Metrics Scraper**: [http://localhost:8000/metrics](http://localhost:8000/metrics)
+- **ChromaDB API Instance**: [http://localhost:8001](http://localhost:8001)
 
 ---
 
-## 🧠 RAG Architecture
+## 📄 Sample Documents
 
-```mermaid
-graph TD
-    A[sample.pdf] -->|PyPDFLoader| B[Raw Text]
-    B -->|RecursiveCharacterTextSplitter| C[Text Chunks]
-    C -->|NVIDIA Embeddings nv-embedqa-e5-v5| D[(ChromaDB Vector Store)]
-    D -->|Persisted to Disk| E[chroma_db_*]
-    
-    F[User Question] -->|NVIDIA Embeddings nv-embedqa-e5-v5| G[Query Vector]
-    G -->|Maximal Marginal Relevance MMR Search| D
-    D -->|Top 6 Chunks Context| H[ChatPromptTemplate]
-    F --> H
-    H -->|System/Human Messages| I[Llama 3.1 8B LLM]
-    I -->|Generates Answer| J[Chatbot Answer]
-```
+To make it as easy as possible for contributors to clone and test DOCMind Enterprise without finding their own files, we have checked public testing files into the [`sample_documents/`](./sample_documents/) directory:
+- **`contract_sample.pdf`**: Best for verifying key obligations, risk flags, and timeline deadlines.
+- **`resume_sample.pdf`**: Best for testing job experience chronologies and technical skill keywords.
+- **`invoice_sample.pdf`**: Best for validating table parsing, billing totals, and financial figures.
+- **`research_paper_sample.pdf`**: Best for verifying academic citations, technical self-attention explanations, and hybrid RAG search queries.
 
-1. **Document Loading**: Text is extracted from the PDF pages using `PyPDFLoader`.
-2. **Text Chunking**: Splitting text into chunks of `1000` characters with a `200` character overlap to maintain semantic context boundaries.
-3. **Embeddings & Persistence**: Text chunks are converted into dense vectors using `nvidia/nv-embedqa-e5-v5` embeddings and stored locally in `chroma_db_<pdf_name>`.
-4. **Retrieval & RAG Chain**: When you ask a question, the vector store retrieves the top 6 most relevant chunks using Maximal Marginal Relevance (MMR) search (optimizing for relevance and diversity). These chunks are embedded into a system prompt context and sent to `meta/llama-3.1-8b-instruct` to formulate a concise, factual response.
-
----
-
-## 🚀 Future Enhancements (Roadmap)
-
-- [ ] **Chat History & Session Memory**: Support multi-turn conversations by allowing the agent to remember context from prior messages.
-- [ ] **Cross-Document Comparison**: Enable analyzing and comparing key terms, statistics, or metrics across multiple uploaded PDFs.
-- [ ] **Alternative Frontend (Gradio)**: Build a second Gradio interface to offer alternative web deployment layouts.
-- [ ] **Multi-PDF Directory Support**: Expand the CLI loader using `DirectoryLoader` to scan and index a folder containing multiple PDFs at once.
-- [ ] **Hybrid Search**: Combine vector search with keyword search (BM25) for more accurate retrieval.
-- [ ] **Open-Source Local LLMs**: Add support for running fully offline using Ollama and local models like Llama 3 or Mistral.
+*Note: Uploaded documents and private fixtures (`uploads/`, `private_documents/`, etc.) are matched by `.gitignore` and will never be tracked or committed to GitHub.*
