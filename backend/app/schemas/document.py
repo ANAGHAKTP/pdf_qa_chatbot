@@ -32,6 +32,7 @@ class DocumentResponse(BaseModel):
     s3_key: Optional[str] = None
     folder_id: Optional[int] = None
     created_at: datetime
+    doc_metadata: Optional[dict] = None
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -1,0 +1,13 @@
+[
+  {
+    "id": "man_001",
+    "document_set": ["System_Admin_Guide.pdf"],
+    "question": "How do you configure backup frequency?",
+    "expected_answer": "Backup frequency is configured in /etc/docmind/config.yaml under the backup.cron field.",
+    "expected_citations": [
+      { "page": 12, "keyword": "backup" }
+    ],
+    "expected_confidence": "HIGH",
+    "metadata": { "domain": "manuals", "difficulty": "easy" }
+  }
+]

@@ -4,14 +4,14 @@ from typing import List, Dict, Any
 
 from app.api import deps
 from app.db.session import get_db
-from app.db.models import User, Document, ChatSession, ChatMessage, Analytics
+from app.db.models import User, Document, ChatSession, ChatMessage, Analytics, Role
 
 router = APIRouter()
 
 
 @router.get("/stats")
 def get_platform_stats(
-    current_user: User = Depends(deps.get_current_admin_user),
+    current_user: User = Depends(deps.require_role(Role.ADMIN)),
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
     """
@@ -51,7 +51,7 @@ def get_platform_stats(
 @router.get("/logs")
 def get_analytics_logs(
     limit: int = 50,
-    current_user: User = Depends(deps.get_current_admin_user),
+    current_user: User = Depends(deps.require_role(Role.ADMIN)),
     db: Session = Depends(get_db)
 ) -> List[Dict[str, Any]]:
     """

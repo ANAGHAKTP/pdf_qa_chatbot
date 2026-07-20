@@ -1,5 +1,8 @@
+import os
+import json
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, BackgroundTasks, status
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, BackgroundTasks, status, Query
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.api import deps
@@ -7,6 +10,7 @@ from app.db.session import get_db
 from app.db.models import User
 from app.schemas.document import FolderCreate, FolderResponse, DocumentResponse, DocumentRename, FolderContentsResponse
 from app.services.document import DocumentService
+from app.ai.ingestion.pipeline import METADATA_DIR
 
 router = APIRouter()
 
@@ -17,12 +21,8 @@ def create_folder(
     current_user: User = Depends(deps.get_current_active_user),
     db: Session = Depends(get_db)
 ):
-    """
-    Create a new directory/folder for organizing documents.
-    """
+    """Create a new directory/folder for organizing documents."""
     doc_service = DocumentService(db)
-    
-    # Verify parent folder belongs to user
     if folder_in.parent_id:
         parent = doc_service.folder_repo.get_by_id(folder_in.parent_id)
         if not parent or parent.user_id != current_user.id:
@@ -41,20 +41,31 @@ def get_folder_contents(
     current_user: User = Depends(deps.get_current_active_user),
     db: Session = Depends(get_db)
 ):
-    """
-    List subfolders and documents inside a specific folder (or root).
-    """
+    """List subfolders and documents inside a specific folder (or root)."""
     doc_service = DocumentService(db)
-    
     if parent_id:
         parent = doc_service.folder_repo.get_by_id(parent_id)
         if not parent or parent.user_id != current_user.id:
             raise HTTPException(status_code=404, detail="Folder not found")
             
     folders, docs = doc_service.get_contents(user_id=current_user.id, folder_id=parent_id)
+
+    # Attach enriched metadata dict if available
+    enriched_docs = []
+    for d in docs:
+        d_dict = DocumentResponse.model_validate(d).model_dump()
+        meta_path = os.path.join(METADATA_DIR, f"{d.id}.json")
+        if os.path.exists(meta_path):
+            try:
+                with open(meta_path, "r") as f:
+                    d_dict["doc_metadata"] = json.load(f)
+            except Exception:
+                pass
+        enriched_docs.append(d_dict)
+
     return {
         "folders": folders,
-        "documents": docs
+        "documents": enriched_docs
     }
 
 
@@ -66,9 +77,7 @@ async def upload_document(
     current_user: User = Depends(deps.get_current_active_user),
     db: Session = Depends(get_db)
 ):
-    """
-    Upload a new PDF document. Starts ingestion and indexing in background.
-    """
+    """Upload a new PDF document. Starts multimodal ingestion and indexing in background."""
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -76,8 +85,6 @@ async def upload_document(
         )
         
     doc_service = DocumentService(db)
-    
-    # Verify folder belongs to user
     if folder_id:
         folder = doc_service.folder_repo.get_by_id(folder_id)
         if not folder or folder.user_id != current_user.id:
@@ -85,7 +92,6 @@ async def upload_document(
             
     file_bytes = await file.read()
     
-    # Check duplicate filenames in same directory level
     contents = doc_service.doc_repo.get_by_folder(current_user.id, folder_id)
     for existing_doc in contents:
         if existing_doc.filename == file.filename:
@@ -104,6 +110,58 @@ async def upload_document(
     return doc
 
 
+@router.get("/{id}/metadata")
+def get_document_metadata(
+    id: int,
+    current_user: User = Depends(deps.get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """Retrieve detailed enriched metadata (tables count, figures count, OCR status, language, etc.)."""
+    doc_service = DocumentService(db)
+    doc = doc_service.doc_repo.get_by_id(id)
+    if not doc or doc.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Document not found or access denied")
+
+    meta_path = os.path.join(METADATA_DIR, f"{id}.json")
+    if os.path.exists(meta_path):
+        try:
+            with open(meta_path, "r") as f:
+                return json.load(f)
+        except Exception:
+            pass
+
+    return {
+        "doc_id": id,
+        "title": doc.filename,
+        "page_count": doc.chunk_count or 1,
+        "is_scanned": False,
+        "ocr_applied": False,
+        "table_count": 0,
+        "figure_count": 0,
+        "language": "en",
+        "document_category": "General Document"
+    }
+
+
+@router.get("/{id}/preview")
+def preview_document_page(
+    id: int,
+    page: int = Query(1, ge=1),
+    current_user: User = Depends(deps.get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """Serves document page preview file stream for PDF Preview UI panel."""
+    doc_service = DocumentService(db)
+    doc = doc_service.doc_repo.get_by_id(id)
+    if not doc or doc.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Document not found or access denied")
+
+    if os.path.exists(doc.filepath):
+        return FileResponse(doc.filepath, media_type="application/pdf", filename=doc.filename)
+
+    raise HTTPException(status_code=404, detail="Document file content not found on server")
+
+
 @router.put("/{id}/rename", response_model=DocumentResponse)
 def rename_document(
     id: int,
@@ -111,9 +169,7 @@ def rename_document(
     current_user: User = Depends(deps.get_current_active_user),
     db: Session = Depends(get_db)
 ):
-    """
-    Rename an existing document.
-    """
+    """Rename an existing document."""
     doc_service = DocumentService(db)
     updated_doc = doc_service.rename_document(
         doc_id=id,
@@ -134,9 +190,7 @@ def delete_document(
     current_user: User = Depends(deps.get_current_active_user),
     db: Session = Depends(get_db)
 ):
-    """
-    Delete a document from database, storage, and Chroma vector store.
-    """
+    """Delete a document from database, storage, and Chroma vector store."""
     doc_service = DocumentService(db)
     success = doc_service.delete_document(doc_id=id, user_id=current_user.id)
     if not success:

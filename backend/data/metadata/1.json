@@ -1,0 +1,25 @@
+{
+  "doc_id": 1,
+  "title": "%PDF-1.4 mock resume content with work history at Google and skills in Python",
+  "author": "System Ingestion Engine",
+  "creation_date": "2026-07-20T08:21:48.270289",
+  "language": "en",
+  "page_count": 1,
+  "file_size_bytes": 77,
+  "is_scanned": false,
+  "ocr_applied": false,
+  "ocr_confidence": 1.0,
+  "table_count": 0,
+  "figure_count": 0,
+  "document_category": "General Document",
+  "keywords": [
+    "PDF-1",
+    "mock",
+    "resume",
+    "content",
+    "work",
+    "history",
+    "Google"
+  ],
+  "sections": []
+}

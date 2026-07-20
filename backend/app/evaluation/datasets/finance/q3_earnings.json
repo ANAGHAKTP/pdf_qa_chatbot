@@ -1,0 +1,24 @@
+[
+  {
+    "id": "fin_001",
+    "document_set": ["Q3_Earnings.pdf"],
+    "question": "What was the total revenue in Q3?",
+    "expected_answer": "Total revenue in Q3 was $52.4 million, representing a 14% year-over-year increase.",
+    "expected_citations": [
+      { "page": 1, "keyword": "revenue" }
+    ],
+    "expected_confidence": "HIGH",
+    "metadata": { "domain": "finance", "difficulty": "easy" }
+  },
+  {
+    "id": "fin_002",
+    "document_set": ["Q3_Earnings.pdf"],
+    "question": "What was the EBITDA margin?",
+    "expected_answer": "The adjusted EBITDA margin reached 28.5%.",
+    "expected_citations": [
+      { "page": 2, "keyword": "EBITDA" }
+    ],
+    "expected_confidence": "HIGH",
+    "metadata": { "domain": "finance", "difficulty": "medium" }
+  }
+]

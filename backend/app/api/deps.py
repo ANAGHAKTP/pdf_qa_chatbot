@@ -63,3 +63,42 @@ def get_current_admin_user(
             detail="The user does not have enough privileges"
         )
     return current_user
+
+
+from app.db.models import Role
+from typing import List
+
+
+def require_authenticated_user(
+    current_user: User = Depends(get_current_active_user)
+) -> User:
+    return current_user
+
+
+def require_role(role: Role):
+    def dependency(current_user: User = Depends(require_authenticated_user)) -> User:
+        if current_user.role != role.value and current_user.role != role:
+            if role == Role.ADMIN or (hasattr(role, "value") and role.value == "ADMIN") or role == "ADMIN":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="The user does not have enough privileges"
+                )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Access forbidden: requires role '{role}'"
+            )
+        return current_user
+    return dependency
+
+
+def require_any_role(roles: List[Role]):
+    def dependency(current_user: User = Depends(require_authenticated_user)) -> User:
+        role_values = [r.value if hasattr(r, "value") else r for r in roles]
+        if current_user.role not in role_values:
+            roles_str = ", ".join(role_values)
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Access forbidden: requires one of the roles: {roles_str}"
+            )
+        return current_user
+    return dependency

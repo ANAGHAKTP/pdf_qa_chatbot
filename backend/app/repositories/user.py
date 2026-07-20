@@ -47,3 +47,40 @@ class UserRepository:
         self.db.commit()
         self.db.refresh(db_user)
         return db_user
+
+    def get_by_email_with_lock(self, email: str) -> Optional[User]:
+        return self.db.query(User).filter(User.email == email).with_for_update().first()
+
+    def get_by_verification_token(self, token_hash: str) -> Optional[User]:
+        return self.db.query(User).filter(User.verification_token_hash == token_hash).first()
+
+    def get_by_password_reset_token(self, token_hash: str) -> Optional[User]:
+        return self.db.query(User).filter(User.password_reset_token_hash == token_hash).first()
+
+    def save(self, user: User) -> User:
+        self.db.add(user)
+        self.db.commit()
+        self.db.refresh(user)
+        return user
+
+    def clear_expired_verification_tokens(self, now) -> int:
+        result = self.db.query(User).filter(
+            User.verification_token_expiry < now,
+            User.verification_token_hash.isnot(None)
+        ).update(
+            {User.verification_token_hash: None, User.verification_token_expiry: None},
+            synchronize_session=False
+        )
+        self.db.commit()
+        return result
+
+    def clear_expired_password_reset_tokens(self, now) -> int:
+        result = self.db.query(User).filter(
+            User.password_reset_token_expiry < now,
+            User.password_reset_token_hash.isnot(None)
+        ).update(
+            {User.password_reset_token_hash: None, User.password_reset_token_expiry: None},
+            synchronize_session=False
+        )
+        self.db.commit()
+        return result

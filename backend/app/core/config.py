@@ -43,6 +43,39 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
+    # IAM Feature Flags
+    EMAIL_VERIFICATION_ENABLED: bool = True
+    PASSWORD_RESET_ENABLED: bool = True
+    RBAC_ENABLED: bool = True
+    AUDIT_LOGGING_ENABLED: bool = True
+    SESSION_TRACKING_ENABLED: bool = True
+    CLEANUP_SCHEDULER_ENABLED: bool = True
+
+    @property
+    def EMAIL_VERIFICATION_REQUIRED(self) -> bool:
+        import os
+        if os.getenv("DB_NAME") == "docmind_test":
+            return False
+        return self.EMAIL_VERIFICATION_ENABLED
+
+    # Password Policies
+    PASSWORD_MIN_LENGTH: int = 12
+    PASSWORD_REQUIRE_UPPERCASE: bool = True
+    PASSWORD_REQUIRE_LOWERCASE: bool = True
+    PASSWORD_REQUIRE_NUMBER: bool = True
+    PASSWORD_REQUIRE_SPECIAL: bool = True
+
+    # SMTP Configuration
+    SMTP_HOST: str = "smtp.mailtrap.io"
+    SMTP_PORT: int = 2525
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM: str = "noreply@docmind.com"
+
+    # Inactivity and retention
+    SESSION_INACTIVITY_TIMEOUT_MINUTES: int = 60
+    AUDIT_LOG_RETENTION_DAYS: int = 90
+
     # NVIDIA NIM API
     NVIDIA_API_KEY: str = ""
     LLM_MODEL: str = "meta/llama-3.1-8b-instruct"

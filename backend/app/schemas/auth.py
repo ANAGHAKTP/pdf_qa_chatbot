@@ -36,3 +36,37 @@ class TokenResponse(BaseModel):
     refresh_token: str
     token_type: str
     user: Optional[UserLoginResponse] = None
+
+
+class EmailVerifyRequest(BaseModel):
+    token: str
+
+
+class ResendVerificationRequest(BaseModel):
+    email: EmailStr
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+
+class LogoutRequest(BaseModel):
+    refresh_token: str
+
+
+class SessionResponse(BaseModel):
+    id: int
+    device_name: Optional[str] = None
+    browser: Optional[str] = None
+    operating_system: Optional[str] = None
+    ip_address: Optional[str] = None
+    last_activity: datetime
+    created_at: datetime
+    is_current: bool
+
+    model_config = ConfigDict(from_attributes=True)

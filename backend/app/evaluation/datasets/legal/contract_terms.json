@@ -1,0 +1,24 @@
+[
+  {
+    "id": "leg_001",
+    "document_set": ["Master_Service_Agreement.pdf"],
+    "question": "What is the limitation of liability cap?",
+    "expected_answer": "The total aggregate liability is capped at $1,000,000 or the total fees paid in the preceding 12 months.",
+    "expected_citations": [
+      { "page": 4, "keyword": "liability" }
+    ],
+    "expected_confidence": "HIGH",
+    "metadata": { "domain": "legal", "difficulty": "medium" }
+  },
+  {
+    "id": "leg_002",
+    "document_set": ["Master_Service_Agreement.pdf"],
+    "question": "What is the governing law jurisdiction?",
+    "expected_answer": "The agreement is governed by the laws of the State of Delaware.",
+    "expected_citations": [
+      { "page": 8, "keyword": "governing law" }
+    ],
+    "expected_confidence": "HIGH",
+    "metadata": { "domain": "legal", "difficulty": "easy" }
+  }
+]

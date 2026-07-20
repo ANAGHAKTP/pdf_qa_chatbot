@@ -48,12 +48,14 @@ def test_complete_e2e_flow(client, db_session):
         files={"file": ("resume_sample.pdf", pdf_content, "application/pdf")},
         data={"folder_id": str(folder_id)}
     )
-    assert upload_response.status_code in [200, 201]
+    assert upload_response.status_code in [200, 201, 202]
     doc_id = upload_response.json()["id"]
     
     # 5. Verify metadata exists in DB
-    doc_details = client.get(f"/api/v1/documents/{doc_id}", headers=headers)
-    assert doc_details.status_code == 200
+    contents_response = client.get(f"/api/v1/documents/contents?parent_id={folder_id}", headers=headers)
+    assert contents_response.status_code == 200
+    docs = contents_response.json()["documents"]
+    assert any(d["id"] == doc_id for d in docs)
     
     # 6. Create a Chat Session
     session_response = client.post(

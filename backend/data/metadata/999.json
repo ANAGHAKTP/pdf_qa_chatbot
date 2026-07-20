@@ -1,0 +1,28 @@
+{
+  "doc_id": 999,
+  "title": "%PDF-1.4 Mock PDF content for multimodal testing",
+  "author": "System Ingestion Engine",
+  "creation_date": "2026-07-20T08:22:10.969647",
+  "language": "en",
+  "page_count": 1,
+  "file_size_bytes": 117,
+  "is_scanned": false,
+  "ocr_applied": false,
+  "ocr_confidence": 1.0,
+  "table_count": 1,
+  "figure_count": 1,
+  "document_category": "General Document",
+  "keywords": [
+    "Figure",
+    "PDF-1",
+    "Mock",
+    "content",
+    "multimodal",
+    "testing",
+    "Title",
+    "Header"
+  ],
+  "sections": [
+    "Title Header"
+  ]
+}
