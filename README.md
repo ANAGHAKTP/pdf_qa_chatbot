@@ -8,7 +8,7 @@ DOCMind Enterprise is a full-stack, microservices-driven AI Document Intelligenc
 
 ---
 
-![DOCMind Enterprise Workspace](./docmind_demo.png)
+![DOCMind Enterprise Workspace](./docs/screenshots/workspace.png)
 
 ---
 
@@ -106,35 +106,59 @@ Access local application endpoints:
 
 ## 📸 Screenshots
 
-### AI Workspace
+### Login
+![Login Screen](./docs/screenshots/login.png)
 
-![DOCMind Workspace](./docmind_demo.png)
-
-*Interactive workspace featuring file library navigation, streaming assistant responses, confidence rating badges, and citation sources.*
+*Secure authentication interface with Argon2id password security, session initialization, and dark SaaS branding.*
 
 ---
 
-### PDF Preview Panel
+### Main Workspace
+![Main Workspace](./docs/screenshots/workspace.png)
 
-![PDF Preview Panel](./docmind_demo.png)
+*Full-stack application layout featuring live conversation sidebar, document hub, KPI telemetry, and workspace prompt shortcuts.*
 
-*Interactive PDF page viewer jumping directly to cited source pages with passage text highlighting and outline tree exploration.*
+---
+
+### Document Hub
+![Document Hub](./docs/screenshots/document_hub.png)
+
+*Hierarchical document library supporting nested folder navigation, instant filename filtering, PDF upload progress, and document cards.*
+
+---
+
+### AI Chat
+![AI Conversational Sandbox](./docs/screenshots/ai_chat.png)
+
+*Conversational sandbox with KPI telemetry counters, RAG processing stepper, workspace prompt shortcuts, and streaming answer outputs.*
+
+---
+
+### Citation Preview
+![Citation Preview](./docs/screenshots/docmind_demo.png)
+
+*Citation modal showing source page numbers, match confidence percentages, unique chunk IDs, and extracted text passages.*
+
+---
+
+### PDF Preview
+![PDF Preview Panel](./docs/screenshots/docmind_demo.png)
+
+*Interactive PDF viewer highlighting cited passages, showing document outline tree navigation, page zoom controls, and extracted asset counts.*
 
 ---
 
 ### Evaluation Dashboard
+![Evaluation Dashboard](./docs/screenshots/docmind_demo.png)
 
-![Evaluation Dashboard](./docmind_demo.png)
-
-*Continuous quality dashboard displaying retrieval metrics, latency bar charts, model benchmarks, prompt versions, and report export tools.*
+*Continuous quality dashboard displaying retrieval recall metrics, latency breakdown charts, model cost/performance comparison tables, and report exporters.*
 
 ---
 
-### Interactive Swagger API Documentation
+### Swagger Documentation
+![Swagger API Documentation](./docs/screenshots/docmind_demo.png)
 
-![Swagger API Documentation](./docmind_demo.png)
-
-*Interactive FastAPI Swagger UI (`/docs`) providing testing endpoints for authentication, document ingestion, chat queries, and evaluation.*
+*Interactive FastAPI Swagger UI (`/docs`) providing OpenAPI schema definitions and endpoint testing for all REST services.*
 
 ---
 
@@ -359,6 +383,8 @@ pdf_qa_chatbot/
 │   ├── tests/                       # Complete Pytest Test Suite (88/88 Passing)
 │   ├── Dockerfile
 │   └── requirements.txt
+├── docs/
+│   └── screenshots/                 # Application Screenshots Gallery
 ├── frontend/
 │   ├── src/
 │   │   ├── app/                     # Next.js 14 Pages (/evaluation, /login, /register, etc.)
