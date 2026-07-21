@@ -135,28 +135,28 @@ Access local application endpoints:
 ---
 
 ### Citation Preview
-![Citation Preview](./docs/screenshots/docmind_demo.png)
+![Citation Preview](./docmind_demo.png)
 
 *Citation modal showing source page numbers, match confidence percentages, unique chunk IDs, and extracted text passages.*
 
 ---
 
 ### PDF Preview
-![PDF Preview Panel](./docs/screenshots/docmind_demo.png)
+![PDF Preview Panel](./docmind_demo.png)
 
 *Interactive PDF viewer highlighting cited passages, showing document outline tree navigation, page zoom controls, and extracted asset counts.*
 
 ---
 
 ### Evaluation Dashboard
-![Evaluation Dashboard](./docs/screenshots/docmind_demo.png)
+![Evaluation Dashboard](./docmind_demo.png)
 
 *Continuous quality dashboard displaying retrieval recall metrics, latency breakdown charts, model cost/performance comparison tables, and report exporters.*
 
 ---
 
 ### Swagger Documentation
-![Swagger API Documentation](./docs/screenshots/docmind_demo.png)
+![Swagger API Documentation](./docmind_demo.png)
 
 *Interactive FastAPI Swagger UI (`/docs`) providing OpenAPI schema definitions and endpoint testing for all REST services.*
 
