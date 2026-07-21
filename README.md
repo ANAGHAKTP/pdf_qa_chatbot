@@ -106,10 +106,17 @@ Access local application endpoints:
 
 ## 📸 Screenshots
 
-### Login
+### Authentication & Login
 ![Login Screen](./docs/screenshots/login.png)
 
 *Secure authentication interface with Argon2id password security, session initialization, and dark SaaS branding.*
+
+---
+
+### Account Registration
+![Account Registration](./docs/screenshots/register.png)
+
+*User onboarding screen featuring validation feedback, password policy enforcement, and role initialization.*
 
 ---
 
@@ -127,38 +134,17 @@ Access local application endpoints:
 
 ---
 
-### AI Chat
+### AI Chat & Evidence Citations
 ![AI Conversational Sandbox](./docs/screenshots/ai_chat.png)
 
-*Conversational sandbox with KPI telemetry counters, RAG processing stepper, workspace prompt shortcuts, and streaming answer outputs.*
+*Conversational sandbox with KPI telemetry counters, RAG processing stepper, evidence citations, interactive PDF preview panel, and streaming answer outputs.*
 
 ---
 
-### Citation Preview
-![Citation Preview](./docmind_demo.png)
+### AI Evaluation & Benchmarking Dashboard
+![Evaluation Dashboard](./docs/screenshots/evaluation.png)
 
-*Citation modal showing source page numbers, match confidence percentages, unique chunk IDs, and extracted text passages.*
-
----
-
-### PDF Preview
-![PDF Preview Panel](./docmind_demo.png)
-
-*Interactive PDF viewer highlighting cited passages, showing document outline tree navigation, page zoom controls, and extracted asset counts.*
-
----
-
-### Evaluation Dashboard
-![Evaluation Dashboard](./docmind_demo.png)
-
-*Continuous quality dashboard displaying retrieval recall metrics, latency breakdown charts, model cost/performance comparison tables, and report exporters.*
-
----
-
-### Swagger Documentation
-![Swagger API Documentation](./docmind_demo.png)
-
-*Interactive FastAPI Swagger UI (`/docs`) providing OpenAPI schema definitions and endpoint testing for all REST services.*
+*Continuous quality dashboard displaying retrieval recall metrics, latency breakdown charts, model cost/performance comparison tables, hallucination classification, and multi-format report exporters.*
 
 ---
 
