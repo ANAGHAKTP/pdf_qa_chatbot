@@ -34,6 +34,13 @@ export async function request(
   });
 
   if (response.status === 401) {
+    // Skip token refresh logic for auth login/token endpoints
+    const isAuthRoute = endpoint.startsWith("/auth/login") || endpoint.startsWith("/auth/token");
+    if (isAuthRoute) {
+      const data = await response.json();
+      throw new Error(data.detail || "Invalid credentials");
+    }
+
     // Access token expired, attempt token refresh
     const refreshed = await attemptTokenRefresh();
     if (refreshed) {

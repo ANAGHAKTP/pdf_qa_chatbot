@@ -74,6 +74,8 @@ services:
         value: 8000
       - key: RUNNING_IN_DOCKER
         value: "True"
+      - key: EMAIL_VERIFICATION_ENABLED
+        value: "False"
       - key: CORS_ORIGINS
         value: "*" # To secure, replace with your Vercel URL once deployed, e.g., "https://your-app.vercel.app"
       - key: NVIDIA_API_KEY
