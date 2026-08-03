@@ -82,5 +82,4 @@ services:
 databases:
   - name: docmind-postgres
     databaseName: docmind
-    user: postgres
     plan: free
