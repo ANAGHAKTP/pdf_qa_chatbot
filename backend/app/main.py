@@ -1,8 +1,10 @@
 import time
 import logging
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session
 from app.core.config import settings
+from app.db.session import get_db
 from app.core.logging import setup_logging
 from app.core.metrics import HTTP_REQUESTS_TOTAL, HTTP_REQUEST_LATENCY, metrics_app
 from app.api.v1.api import api_router
@@ -28,22 +30,71 @@ app = FastAPI(
 @app.on_event("startup")
 def startup_event():
     from app.core.events import event_publisher
-    from app.services.email import EmailService, MockEmailProvider, ImmediateEmailDispatcher
+    from app.services.email import EmailService, MockEmailProvider, SMTPEmailProvider, ImmediateEmailDispatcher
     from app.services.metrics import MetricsService
     from app.services.audit import AuditLogService
+    from app.db.session import engine
     import os
+    import logging
+
+    startup_logger = logging.getLogger("app.startup")
+
     if os.getenv("DB_NAME") == "docmind_test":
         from sqlalchemy import create_engine
         from sqlalchemy.orm import sessionmaker
         test_engine = create_engine("sqlite:///./test.db", connect_args={"check_same_thread": False})
         session_factory = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
+        db_engine_to_test = test_engine
     else:
         from app.db.session import SessionLocal as session_factory
+        db_engine_to_test = engine
 
-    # 1. Instantiate services
-    email_provider = MockEmailProvider()
+    # 1. Instantiate services with dynamic SMTP fallback
+    if settings.SMTP_USER and settings.SMTP_PASSWORD:
+        try:
+            email_provider = SMTPEmailProvider()
+            startup_logger.info("SMTPEmailProvider initialized successfully.")
+        except Exception as e:
+            startup_logger.warning(
+                f"SMTP configuration error, falling back to MockEmailProvider: {str(e)}"
+            )
+            email_provider = MockEmailProvider()
+    else:
+        email_provider = MockEmailProvider()
     email_dispatcher = ImmediateEmailDispatcher(email_provider)
     email_service = EmailService(email_dispatcher)
+
+    # Startup Diagnostics
+    startup_logger.info("=== STARTUP DIAGNOSTICS ===")
+    startup_logger.info(f"Environment (Docker): {os.getenv('RUNNING_IN_DOCKER', 'False')}")
+    startup_logger.info(f"Email Provider: {email_provider.__class__.__name__}")
+    startup_logger.info(f"SMTP Host: {settings.SMTP_HOST or 'Not Configured'}")
+    startup_logger.info(f"SMTP Port: {settings.SMTP_PORT or 'Not Configured'}")
+    startup_logger.info(f"Frontend URL: {settings.FRONTEND_URL}")
+
+    # Check Database connection
+    try:
+        from sqlalchemy import text
+        with db_engine_to_test.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        startup_logger.info("Database Connection: SUCCESS")
+    except Exception as db_err:
+        startup_logger.error(f"Database Connection: FAILED ({str(db_err)})")
+
+    # Check Redis connection
+    try:
+        import redis
+        r = redis.Redis(
+            host=settings.REDIS_HOST,
+            port=settings.REDIS_PORT,
+            password=settings.REDIS_PASSWORD,
+            socket_timeout=3.0
+        )
+        r.ping()
+        startup_logger.info("Redis Connection: SUCCESS")
+    except Exception as redis_err:
+        startup_logger.error(f"Redis Connection: FAILED ({str(redis_err)})")
+    startup_logger.info("===========================")
     
     metrics_service = MetricsService()
     audit_service = AuditLogService(db_session_factory=session_factory)
@@ -169,6 +220,50 @@ def root():
         "status": "healthy",
         "project": settings.PROJECT_NAME,
         "version": "1.0.0"
+    }
+
+
+@app.get("/health", summary="Active dependency health status checks")
+def health_check(db: Session = Depends(get_db)):
+    db_ok = False
+    redis_ok = False
+    
+    # Verify PostgreSQL
+    try:
+        from sqlalchemy import text
+        db.execute(text("SELECT 1"))
+        db_ok = True
+    except Exception as e:
+        logger.error(f"Health check database query failed: {str(e)}")
+
+    # Verify Redis
+    try:
+        import redis
+        r = redis.Redis(
+            host=settings.REDIS_HOST,
+            port=settings.REDIS_PORT,
+            password=settings.REDIS_PASSWORD,
+            socket_timeout=1.0
+        )
+        r.ping()
+        redis_ok = True
+    except Exception as e:
+        logger.error(f"Health check Redis ping failed: {str(e)}")
+
+    if not db_ok or not redis_ok:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "status": "unhealthy",
+                "database": "connected" if db_ok else "disconnected",
+                "redis": "connected" if redis_ok else "disconnected"
+            }
+        )
+
+    return {
+        "status": "healthy",
+        "database": "connected",
+        "redis": "connected"
     }
 
 

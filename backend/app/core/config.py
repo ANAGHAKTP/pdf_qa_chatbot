@@ -78,6 +78,9 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str = ""
     SMTP_FROM: str = "noreply@docmind.com"
 
+    # Frontend URL
+    FRONTEND_URL: str = "http://localhost:3000"
+
     # Inactivity and retention
     SESSION_INACTIVITY_TIMEOUT_MINUTES: int = 60
     AUDIT_LOG_RETENTION_DAYS: int = 90

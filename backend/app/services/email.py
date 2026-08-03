@@ -31,13 +31,26 @@ class MockEmailProvider(EmailProvider):
         )
 
 
+class EmailDeliveryException(RuntimeError):
+    """Custom exception raised when email delivery fails."""
+    pass
+
+
 class SMTPEmailProvider(EmailProvider):
     def __init__(self):
+        # Validate critical configurations at startup
         self.host = settings.SMTP_HOST
         self.port = settings.SMTP_PORT
         self.username = settings.SMTP_USER
         self.password = settings.SMTP_PASSWORD
         self.sender = settings.SMTP_FROM
+
+        if not self.host:
+            raise ValueError("SMTP_HOST configuration is missing.")
+        if not self.port or not isinstance(self.port, int) or self.port <= 0:
+            raise ValueError(f"SMTP_PORT must be a positive integer, got: {self.port}")
+        if not self.sender:
+            raise ValueError("SMTP_FROM configuration is missing.")
 
     def send_email(self, to_email: str, subject: str, html_content: str) -> None:
         msg = MIMEMultipart("alternative")
@@ -46,16 +59,54 @@ class SMTPEmailProvider(EmailProvider):
         msg["To"] = to_email
         msg.attach(MIMEText(html_content, "html"))
 
-        try:
-            with smtplib.SMTP(self.host, self.port) as server:
-                if self.username and self.password:
-                    server.starttls()
-                    server.login(self.username, self.password)
-                server.sendmail(self.sender, [to_email], msg.as_string())
-            logger.info(f"SMTP email sent successfully to {to_email} (Size: {len(html_content)} bytes)")
-        except Exception as e:
-            logger.error(f"Failed to send SMTP email to {to_email}: {str(e)}", exc_info=True)
-            raise RuntimeError(f"Email delivery failed: {str(e)}")
+        max_retries = 3
+        timeout_seconds = 10.0
+
+        for attempt in range(1, max_retries + 1):
+            try:
+                logger.info(f"Attempting SMTP email delivery to {to_email} (Attempt {attempt}/{max_retries})...")
+                
+                # Implicit SSL for Port 465, explicit STARTTLS for standard ports
+                if self.port == 465:
+                    server = smtplib.SMTP_SSL(self.host, self.port, timeout=timeout_seconds)
+                else:
+                    server = smtplib.SMTP(self.host, self.port, timeout=timeout_seconds)
+
+                with server:
+                    # Explicit protocol negotiation (EHLO)
+                    server.ehlo()
+
+                    # Port 587 or 25 upgrades via STARTTLS
+                    if self.port != 465:
+                        if server.has_ext("STARTTLS"):
+                            server.starttls()
+                            server.ehlo()  # Re-send EHLO to negotiate authenticated commands
+                        else:
+                            logger.warning("SMTP server does not support STARTTLS, continuing in plaintext.")
+
+                    # Authentication
+                    if self.username and self.password:
+                        server.login(self.username, self.password)
+
+                    server.sendmail(self.sender, [to_email], msg.as_string())
+                
+                logger.info(f"SMTP email sent successfully to {to_email} (Size: {len(html_content)} bytes)")
+                return  # Success, exit the retry loop
+                
+            except Exception as e:
+                # Exponential backoff: 1s, 2s, 4s delay
+                backoff_delay = 2.0 ** (attempt - 1)
+                logger.warning(
+                    f"SMTP delivery attempt {attempt} failed for {to_email}: {str(e)}"
+                )
+                if attempt == max_retries:
+                    logger.error(
+                        f"Failed to send SMTP email to {to_email} after {max_retries} attempts: {str(e)}", 
+                        exc_info=True
+                    )
+                    raise EmailDeliveryException(f"Email delivery failed: SMTP delivery failed after {max_retries} attempts: {str(e)}")
+                import time
+                time.sleep(backoff_delay)
 
 
 # 2. Email Dispatcher Abstraction (Decouples delivery scheduler/queue)
@@ -93,7 +144,8 @@ class EmailService:
         return template.render(**context)
 
     def send_verification_email(self, email: str, name: str, token: str) -> None:
-        verification_url = f"http://localhost:3000/auth/verify-email?token={token}"
+        base_url = settings.FRONTEND_URL.rstrip("/")
+        verification_url = f"{base_url}/auth/verify-email?token={token}"
         html_content = self.render_template(
             "verification.html",
             {
@@ -108,7 +160,8 @@ class EmailService:
         )
 
     def send_password_reset_email(self, email: str, name: str, token: str) -> None:
-        reset_url = f"http://localhost:3000/auth/reset-password?token={token}"
+        base_url = settings.FRONTEND_URL.rstrip("/")
+        reset_url = f"{base_url}/auth/reset-password?token={token}"
         html_content = self.render_template(
             "password_reset.html",
             {

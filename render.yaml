@@ -76,8 +76,10 @@ services:
         value: "True"
       - key: EMAIL_VERIFICATION_ENABLED
         value: "False"
+      - key: FRONTEND_URL
+        value: "https://pdf-qa-chatbot-rho.vercel.app"
       - key: CORS_ORIGINS
-        value: "*" # To secure, replace with your Vercel URL once deployed, e.g., "https://your-app.vercel.app"
+        value: "https://pdf-qa-chatbot-rho.vercel.app"
       - key: NVIDIA_API_KEY
         sync: false # Render prompts the user during blueprint deploy
       - key: SECRET_KEY

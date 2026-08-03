@@ -1,0 +1,20 @@
+{
+  "run_id": "eval_ab6546b7",
+  "dataset_name": "finance",
+  "model_name": "gemini-1.5-flash",
+  "embedding_name": "nvidia-nv-embed-v1",
+  "prompt_version": "v3",
+  "total_cases": 2,
+  "passed_cases": 2,
+  "avg_latency_ms": 0.0,
+  "total_tokens": 640,
+  "metrics": {
+    "recall_at_k": 1.5,
+    "precision_at_k": 0.75,
+    "answer_similarity": 1.0,
+    "citation_accuracy": 1.0,
+    "hallucination_rate": 0.0,
+    "avg_latency_ms": 0.0
+  },
+  "timestamp": "2026-08-03T15:00:47.931935"
+}
