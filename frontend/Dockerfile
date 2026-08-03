@@ -8,6 +8,8 @@ RUN npm install
 COPY . .
 
 # Bypass type checking during build for sample environment tests if needed
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
