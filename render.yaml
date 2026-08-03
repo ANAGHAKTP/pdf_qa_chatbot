@@ -3,7 +3,8 @@ services:
   - type: web
     name: docmind-chromadb
     runtime: image
-    image: docker.io/chromadb/chroma:latest
+    image:
+      url: docker.io/chromadb/chroma:latest
     plan: free
     envVars:
       - key: IS_PERSISTENT
