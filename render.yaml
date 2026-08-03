@@ -18,6 +18,12 @@ services:
     #   mountPath: /chroma/data
     #   sizeGB: 1
 
+  # Redis (Key Value) Instance
+  - type: keyvalue
+    name: docmind-redis
+    plan: free
+    ipAllowList: [] # Restrict access to only internal services
+
   # FastAPI Backend Service
   - type: web
     name: docmind-backend
@@ -51,12 +57,14 @@ services:
           name: docmind-postgres
           property: connectionString
       - key: REDIS_HOST
-        fromRedis:
+        fromService:
           name: docmind-redis
+          type: keyvalue
           property: host
       - key: REDIS_PORT
-        fromRedis:
+        fromService:
           name: docmind-redis
+          type: keyvalue
           property: port
       - key: CHROMADB_HOST
         value: docmind-chromadb
@@ -65,34 +73,14 @@ services:
       - key: RUNNING_IN_DOCKER
         value: "True"
       - key: CORS_ORIGINS
-        value: "*"
+        value: "*" # To secure, replace with your Vercel URL once deployed, e.g., "https://your-app.vercel.app"
       - key: NVIDIA_API_KEY
         sync: false # Render prompts the user during blueprint deploy
       - key: SECRET_KEY
         generateValue: true
 
-  # Next.js Frontend UI
-  - type: web
-    name: docmind-frontend
-    env: docker
-    dockerfilePath: frontend/Dockerfile
-    dockerContext: frontend
-    plan: free
-    envVars:
-      - key: DOCMIND_BACKEND_URL
-        fromService:
-          name: docmind-backend
-          type: web
-          property: url
-      - key: NEXT_PUBLIC_API_URL
-        value: ${DOCMIND_BACKEND_URL}/api/v1
-
 databases:
   - name: docmind-postgres
     databaseName: docmind
     user: postgres
-    plan: free
-
-redis:
-  - name: docmind-redis
     plan: free
