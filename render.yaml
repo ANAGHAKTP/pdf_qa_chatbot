@@ -2,7 +2,8 @@ services:
   # ChromaDB Vector Database
   - type: web
     name: docmind-chromadb
-    env: docker
+    runtime: image
+    image: docker.io/chromadb/chroma:latest
     plan: free
     envVars:
       - key: IS_PERSISTENT
@@ -27,7 +28,7 @@ services:
   # FastAPI Backend Service
   - type: web
     name: docmind-backend
-    env: docker
+    runtime: docker
     dockerfilePath: backend/Dockerfile
     dockerContext: backend
     plan: free
