@@ -2,8 +2,9 @@ import os
 import pickle
 from app.core.config import settings
 
-PARENTS_DIR = "./data/parents"
-BM25_DIR = "./data/bm25"
+DATA_DIR = os.getenv("DATA_DIR", getattr(settings, "DATA_DIR", "./data"))
+PARENTS_DIR = os.path.join(DATA_DIR, "parents")
+BM25_DIR = os.path.join(DATA_DIR, "bm25")
 os.makedirs(PARENTS_DIR, exist_ok=True)
 os.makedirs(BM25_DIR, exist_ok=True)
 
@@ -20,10 +21,11 @@ def get_chroma_client():
             api_key=settings.NVIDIA_API_KEY
         )
     
-    if os.getenv("CHROMADB_HOST") in [None, "localhost", "127.0.0.1"] and not os.getenv("RUNNING_IN_DOCKER"):
+    if os.getenv("CHROMADB_HOST") in [None, "localhost", "127.0.0.1"]:
         from langchain_chroma import Chroma
+        chroma_dir = os.path.join(DATA_DIR, "chroma_db")
         return Chroma(
-            persist_directory="./data/chroma_db",
+            persist_directory=chroma_dir,
             embedding_function=embeddings
         )
     else:

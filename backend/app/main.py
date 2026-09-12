@@ -93,7 +93,18 @@ def startup_event():
         r.ping()
         startup_logger.info("Redis Connection: SUCCESS")
     except Exception as redis_err:
-        startup_logger.error(f"Redis Connection: FAILED ({str(redis_err)})")
+        startup_logger.warning(f"Redis Connection: FAILED ({str(redis_err)}) - Proceeding without Redis cache.")
+    
+    # 3. Startup Recovery: Reset any stranded indexing documents interrupted by previous restart
+    try:
+        from sqlalchemy import text
+        with db_engine_to_test.connect() as conn:
+            res = conn.execute(text("UPDATE documents SET status = 'failed' WHERE status = 'indexing'"))
+            conn.commit()
+            if res.rowcount > 0:
+                startup_logger.info(f"Startup Recovery: Reset {res.rowcount} stranded indexing document(s) to 'failed' state.")
+    except Exception as reset_err:
+        startup_logger.warning(f"Startup Recovery Check warning: {str(reset_err)}")
     startup_logger.info("===========================")
     
     metrics_service = MetricsService()
@@ -250,12 +261,12 @@ def health_check(db: Session = Depends(get_db)):
     except Exception as e:
         logger.error(f"Health check Redis ping failed: {str(e)}")
 
-    if not db_ok or not redis_ok:
+    if not db_ok:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail={
                 "status": "unhealthy",
-                "database": "connected" if db_ok else "disconnected",
+                "database": "disconnected",
                 "redis": "connected" if redis_ok else "disconnected"
             }
         )
@@ -263,7 +274,7 @@ def health_check(db: Session = Depends(get_db)):
     return {
         "status": "healthy",
         "database": "connected",
-        "redis": "connected"
+        "redis": "connected" if redis_ok else "disconnected"
     }
 
 

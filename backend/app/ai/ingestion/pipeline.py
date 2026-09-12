@@ -14,7 +14,8 @@ from rank_bm25 import BM25Okapi
 
 logger = logging.getLogger(__name__)
 
-METADATA_DIR = "./data/metadata"
+DATA_DIR = os.getenv("DATA_DIR", "./data")
+METADATA_DIR = os.path.join(DATA_DIR, "metadata")
 os.makedirs(METADATA_DIR, exist_ok=True)
 
 

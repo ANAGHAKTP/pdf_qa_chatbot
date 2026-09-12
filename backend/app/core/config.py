@@ -92,8 +92,9 @@ class Settings(BaseSettings):
     RERANK_MODEL: str = "nvidia/reranking-nv-embed-rerank-large"
 
     # Storage
+    DATA_DIR: str = os.getenv("DATA_DIR", "./data")
     USE_S3: bool = False
-    UPLOAD_DIR: str = "./data/uploads"
+    UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", os.path.join(os.getenv("DATA_DIR", "./data"), "uploads"))
     AWS_BUCKET_NAME: str = "docmind-enterprise-bucket"
     AWS_ACCESS_KEY_ID: str = ""
     AWS_SECRET_ACCESS_KEY: str = ""

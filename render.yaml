@@ -1,77 +1,22 @@
 services:
-  # ChromaDB Vector Database
-  - type: web
-    name: docmind-chromadb
-    runtime: image
-    image:
-      url: docker.io/chromadb/chroma:latest
-    plan: free
-    envVars:
-      - key: IS_PERSISTENT
-        value: "TRUE"
-      - key: PERSIST_DIRECTORY
-        value: /chroma/data
-      - key: PORT
-        value: 8000
-    # Note: Free plan on Render does not support disks.
-    # To run in production with persistence, upgrade to a paid service (e.g., Starter) and uncomment the disk configuration:
-    # disk:
-    #   name: chroma-data
-    #   mountPath: /chroma/data
-    #   sizeGB: 1
-
-  # Redis (Key Value) Instance
-  - type: keyvalue
-    name: docmind-redis
-    plan: free
-    ipAllowList: [] # Restrict access to only internal services
-
   # FastAPI Backend Service
   - type: web
     name: docmind-backend
     runtime: docker
     dockerfilePath: backend/Dockerfile
     dockerContext: backend
-    plan: free
+    plan: starter
+    disk:
+      name: docmind-data
+      mountPath: /app/data
+      sizeGB: 1
     envVars:
-      - key: DB_HOST
-        fromDatabase:
-          name: docmind-postgres
-          property: host
-      - key: DB_PORT
-        fromDatabase:
-          name: docmind-postgres
-          property: port
-      - key: DB_USER
-        fromDatabase:
-          name: docmind-postgres
-          property: user
-      - key: DB_PASSWORD
-        fromDatabase:
-          name: docmind-postgres
-          property: password
-      - key: DB_NAME
-        fromDatabase:
-          name: docmind-postgres
-          property: database
-      - key: DATABASE_URL
-        fromDatabase:
-          name: docmind-postgres
-          property: connectionString
-      - key: REDIS_HOST
-        fromService:
-          name: docmind-redis
-          type: keyvalue
-          property: host
-      - key: REDIS_PORT
-        fromService:
-          name: docmind-redis
-          type: keyvalue
-          property: port
+      - key: DATA_DIR
+        value: /app/data
+      - key: UPLOAD_DIR
+        value: /app/data/uploads
       - key: CHROMADB_HOST
-        value: docmind-chromadb
-      - key: CHROMADB_PORT
-        value: 8000
+        value: localhost
       - key: RUNNING_IN_DOCKER
         value: "True"
       - key: EMAIL_VERIFICATION_ENABLED
@@ -80,12 +25,18 @@ services:
         value: "https://pdf-qa-chatbot-rho.vercel.app"
       - key: CORS_ORIGINS
         value: "https://pdf-qa-chatbot-rho.vercel.app"
+      - key: DATABASE_URL
+        sync: false # Set in Render Dashboard (e.g. Supabase connection string)
+      - key: REDIS_HOST
+        value: "" # Optional Redis host (leave empty if not using Redis)
+      - key: REDIS_PORT
+        value: "6379"
+      - key: REDIS_PASSWORD
+        value: ""
       - key: NVIDIA_API_KEY
         sync: false # Render prompts the user during blueprint deploy
-      - key: SECRET_KEY
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
         generateValue: true
 
-databases:
-  - name: docmind-postgres
-    databaseName: docmind
-    plan: free
