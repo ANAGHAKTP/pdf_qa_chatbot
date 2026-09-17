@@ -5,20 +5,26 @@ services:
     runtime: docker
     dockerfilePath: backend/Dockerfile
     dockerContext: backend
-    plan: starter
-    disk:
-      name: docmind-data
-      mountPath: /app/data
-      sizeGB: 1
+    plan: free
     envVars:
-      - key: DATA_DIR
-        value: /app/data
-      - key: UPLOAD_DIR
-        value: /app/data/uploads
-      - key: CHROMADB_HOST
-        value: localhost
       - key: RUNNING_IN_DOCKER
         value: "True"
+      - key: USE_S3
+        value: "True"
+      - key: AWS_S3_ENDPOINT_URL
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AWS_REGION
+        value: "us-east-1"
+      - key: AWS_BUCKET_NAME
+        sync: false
+      - key: QDRANT_URL
+        sync: false
+      - key: QDRANT_API_KEY
+        sync: false
       - key: EMAIL_VERIFICATION_ENABLED
         value: "False"
       - key: FRONTEND_URL

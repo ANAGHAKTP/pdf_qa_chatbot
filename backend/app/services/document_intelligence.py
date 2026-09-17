@@ -4,8 +4,6 @@ from typing import Dict, Any, Optional
 from langchain_nvidia_ai_endpoints import ChatNVIDIA
 from app.core.config import settings
 
-PARENTS_DIR = "./data/parents"
-
 
 class DocumentIntelligenceService:
     def __init__(self, api_key: str):
@@ -19,24 +17,27 @@ class DocumentIntelligenceService:
             )
 
     def _get_document_text(self, doc_id: int) -> str:
-        parent_file = os.path.join(PARENTS_DIR, f"{doc_id}.pkl")
-        if not os.path.exists(parent_file):
-            raise FileNotFoundError(f"Processed document text not found for doc {doc_id}")
-            
-        with open(parent_file, "rb") as f:
-            pages = pickle.load(f)
-            
-        # Concatenate first few pages (e.g. up to 10 pages) to prevent model context blowing up
-        sorted_pages = sorted(pages.keys(), key=lambda x: int(x))
-        full_text_list = []
-        for p in sorted_pages[:10]:
-            full_text_list.append(f"--- PAGE {p} ---\n{pages[p]}")
-            
-        full_text = "\n".join(full_text_list)
-        if len(sorted_pages) > 10:
-            full_text += f"\n\n[... Truncated {len(sorted_pages) - 10} additional pages ...]"
-            
-        return full_text
+        from app.db.session import SessionLocal
+        from app.db.models import DocumentPage
+
+        with SessionLocal() as db:
+            pages = db.query(DocumentPage).filter(
+                DocumentPage.doc_id == doc_id
+            ).order_by(DocumentPage.page_num.asc()).limit(10).all()
+
+            if not pages:
+                raise FileNotFoundError(f"Processed document text not found for doc {doc_id}")
+
+            full_text_list = []
+            for p in pages:
+                full_text_list.append(f"--- PAGE {p.page_num} ---\n{p.text}")
+
+            full_text = "\n".join(full_text_list)
+            total_pages = db.query(DocumentPage).filter(DocumentPage.doc_id == doc_id).count()
+            if total_pages > 10:
+                full_text += f"\n\n[... Truncated {total_pages - 10} additional pages ...]"
+
+            return full_text
 
     def analyze_document(self, doc_id: int) -> Dict[str, Any]:
         """Perform full document intelligence analysis using LLM."""

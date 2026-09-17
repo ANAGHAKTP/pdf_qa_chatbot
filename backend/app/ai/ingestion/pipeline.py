@@ -1,8 +1,9 @@
 import os
-import pickle
+import uuid
 import logging
 from typing import List, Dict, Any, Tuple
-from app.ai.common import get_chroma_client, PARENTS_DIR, BM25_DIR
+from sqlalchemy import func
+from app.ai.common import get_qdrant_client
 from app.ai.ingestion.file_validation import FileValidator
 from app.ai.ingestion.ocr import OCRProcessor
 from app.ai.ingestion.structure import DocumentStructureAnalyzer
@@ -10,13 +11,8 @@ from app.ai.ingestion.tables import TableExtractor
 from app.ai.ingestion.images import ImageExtractor
 from app.ai.ingestion.metadata import MetadataEnricher
 from app.ai.ingestion.chunker import AdvancedChunker
-from rank_bm25 import BM25Okapi
 
 logger = logging.getLogger(__name__)
-
-DATA_DIR = os.getenv("DATA_DIR", "./data")
-METADATA_DIR = os.path.join(DATA_DIR, "metadata")
-os.makedirs(METADATA_DIR, exist_ok=True)
 
 
 class ModularIngestionPipeline:
@@ -32,6 +28,10 @@ class ModularIngestionPipeline:
         self.chunker = AdvancedChunker()
 
     def process_and_index(self, doc_id: int, filename: str, file_bytes: bytes) -> Dict[str, Any]:
+        # 0. Idempotent pre-cleanup of existing artifacts for this document
+        from app.ai.pipeline import remove_document_embeddings
+        remove_document_embeddings(doc_id)
+
         # 1. Validation
         val_res = self.validator.validate(filename, file_bytes)
         if not val_res.is_valid:
@@ -56,11 +56,6 @@ class ModularIngestionPipeline:
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
 
-        # 2. Save Parent pages to disk
-        doc_parents = {str(p["page_num"]): p["text"] for p in pages_data}
-        with open(os.path.join(PARENTS_DIR, f"{doc_id}.pkl"), "wb") as f:
-            pickle.dump(doc_parents, f)
-
         # 3. OCR Stage
         ocr_results, is_scanned = self.ocr_processor.process_pages(pages_data)
         ocr_confidence = float(sum(r.ocr_confidence for r in ocr_results) / len(ocr_results)) if ocr_results else 1.0
@@ -68,6 +63,20 @@ class ModularIngestionPipeline:
         # Update pages_data with OCR text if applied
         for r in ocr_results:
             pages_data[r.page_num - 1]["text"] = r.text
+
+        # 2. Save Parent pages to Database (DocumentPage table)
+        from app.db.session import SessionLocal
+        from app.db.models import Document, DocumentPage, DocumentChunk
+
+        with SessionLocal() as db:
+            for p in pages_data:
+                db_page = DocumentPage(
+                    doc_id=doc_id,
+                    page_num=p["page_num"],
+                    text=p["text"]
+                )
+                db.add(db_page)
+            db.commit()
 
         # 4. Structure & Layout Analysis
         outline = self.analyzer.analyze_document(pages_data)
@@ -99,10 +108,13 @@ class ModularIngestionPipeline:
             sections=sections_titles
         )
 
-        # Save metadata JSON to disk
-        import json
-        with open(os.path.join(METADATA_DIR, f"{doc_id}.json"), "w") as f:
-            json.dump(doc_meta.to_dict(), f, indent=2)
+        # Update Document record with enriched metadata JSON in DB
+        meta_dict = doc_meta.to_dict()
+        with SessionLocal() as db:
+            doc_record = db.query(Document).filter(Document.id == doc_id).first()
+            if doc_record:
+                doc_record.doc_metadata = meta_dict
+                db.commit()
 
         # 8. Structure-Aware Advanced Chunking
         multimodal_chunks = self.chunker.chunk_document(
@@ -112,9 +124,8 @@ class ModularIngestionPipeline:
             figures=extracted_figures
         )
 
-        # 9. Index Chunks in ChromaDB and BM25
+        # 9. Index Chunks in Database (DocumentChunk + search_vector) and Qdrant
         if multimodal_chunks:
-            vectorstore = get_chroma_client()
             texts = [c.content for c in multimodal_chunks]
             metadatas = [
                 {
@@ -128,26 +139,46 @@ class ModularIngestionPipeline:
                 }
                 for c in multimodal_chunks
             ]
-            ids = [c.chunk_id for c in multimodal_chunks]
-            vectorstore.add_texts(texts=texts, metadatas=metadatas, ids=ids)
 
-            # Build BM25
-            tokenized_corpus = [t.lower().split() for t in texts]
-            bm25 = BM25Okapi(tokenized_corpus)
-            bm25_data = {
-                "bm25": bm25,
-                "texts": texts,
-                "metadatas": metadatas
-            }
-            with open(os.path.join(BM25_DIR, f"{doc_id}.pkl"), "wb") as f:
-                pickle.dump(bm25_data, f)
+            # Deterministic UUIDv5 IDs for Qdrant points
+            NAMESPACE_DOCMIND = uuid.UUID("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
+            point_ids = [
+                str(uuid.uuid5(NAMESPACE_DOCMIND, f"{c.doc_id}_{c.chunk_id}"))
+                for c in multimodal_chunks
+            ]
+
+            # A. Save chunks to PostgreSQL DocumentChunk table
+            with SessionLocal() as db:
+                is_postgres = db.bind and db.bind.dialect.name == "postgresql"
+                for c, meta in zip(multimodal_chunks, metadatas):
+                    search_vec_val = func.to_tsvector('english', c.content) if is_postgres else c.content
+                    chunk_obj = DocumentChunk(
+                        doc_id=c.doc_id,
+                        page=c.page,
+                        chunk_idx=c.chunk_idx,
+                        chunk_id=c.chunk_id,
+                        content=c.content,
+                        parent_section=c.parent_section or "General",
+                        metadata_json=meta,
+                        search_vector=search_vec_val
+                    )
+                    db.add(chunk_obj)
+                db.commit()
+
+            # B. Index in Qdrant Cloud
+            try:
+                vectorstore = get_qdrant_client()
+                vectorstore.add_texts(texts=texts, metadatas=metadatas, ids=point_ids)
+            except Exception as qdrant_err:
+                logger.error(f"Failed to index chunks into Qdrant: {qdrant_err}")
+                raise qdrant_err
 
         logger.info(f"Ingested doc #{doc_id} ('{filename}'): {len(multimodal_chunks)} chunks, {len(extracted_tables)} tables, {len(extracted_figures)} figures.")
 
         return {
             "doc_id": doc_id,
             "chunk_count": len(multimodal_chunks),
-            "metadata": doc_meta.to_dict(),
+            "metadata": meta_dict,
             "table_count": len(extracted_tables),
             "figure_count": len(extracted_figures)
         }

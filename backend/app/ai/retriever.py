@@ -1,12 +1,16 @@
 import os
-import pickle
+import logging
 from typing import List, Dict, Any, Optional
 import numpy as np
+from sqlalchemy import func
 from app.core.config import settings
-from app.ai.common import get_chroma_client, BM25_DIR
+from app.ai.common import get_qdrant_client
+
+logger = logging.getLogger(__name__)
+
 
 class DenseRetriever:
-    """Stage 1: Vector similarity / MMR retrieval from ChromaDB."""
+    """Stage 1: Vector similarity / MMR retrieval from Qdrant Cloud."""
     
     def __init__(self, k: int = 15):
         self.k = k
@@ -15,50 +19,63 @@ class DenseRetriever:
         if not queries or not doc_ids:
             return []
 
-        vectorstore = get_chroma_client()
         results = []
         seen_ids = set()
 
-        base_filter = {"doc_id": doc_ids[0]} if len(doc_ids) == 1 else {"doc_id": {"$in": doc_ids}}
-        if metadata_filters:
-            # Merge extra filters like page
-            merged_filter = {**base_filter}
-            for key, val in metadata_filters.items():
-                merged_filter[key] = val
-            filter_dict = merged_filter
-        else:
-            filter_dict = base_filter
+        try:
+            vectorstore = get_qdrant_client()
+            from qdrant_client.http import models
 
-        for q in queries:
-            try:
-                docs_with_scores = vectorstore.max_marginal_relevance_search(
-                    query=q,
-                    k=self.k,
-                    fetch_k=self.k * 3,
-                    filter=filter_dict
-                )
-                for doc in docs_with_scores:
-                    page = doc.metadata.get("page")
-                    chunk_idx = doc.metadata.get("chunk_idx")
-                    doc_id = doc.metadata.get("doc_id")
-                    unique_id = f"{doc_id}_{page}_{chunk_idx}"
+            if len(doc_ids) == 1:
+                must_conditions = [
+                    models.FieldCondition(key="metadata.doc_id", match=models.MatchValue(value=doc_ids[0]))
+                ]
+            else:
+                must_conditions = [
+                    models.FieldCondition(key="metadata.doc_id", match=models.MatchAny(any=doc_ids))
+                ]
 
-                    if unique_id not in seen_ids:
-                        seen_ids.add(unique_id)
-                        results.append({
-                            "content": doc.page_content,
-                            "metadata": doc.metadata,
-                            "score": 0.5,
-                            "retrieval_type": "dense"
-                        })
-            except Exception as e:
-                pass
+            if metadata_filters:
+                for k, v in metadata_filters.items():
+                    must_conditions.append(
+                        models.FieldCondition(key=f"metadata.{k}", match=models.MatchValue(value=v))
+                    )
+
+            qdrant_filter = models.Filter(must=must_conditions)
+
+            for q in queries:
+                try:
+                    docs = vectorstore.max_marginal_relevance_search(
+                        query=q,
+                        k=self.k,
+                        fetch_k=self.k * 3,
+                        filter=qdrant_filter
+                    )
+                    for doc in docs:
+                        meta = doc.metadata or {}
+                        page = meta.get("page", 1)
+                        chunk_idx = meta.get("chunk_idx", 0)
+                        d_id = meta.get("doc_id", doc_ids[0])
+                        unique_id = f"{d_id}_{page}_{chunk_idx}"
+
+                        if unique_id not in seen_ids:
+                            seen_ids.add(unique_id)
+                            results.append({
+                                "content": doc.page_content,
+                                "metadata": meta,
+                                "score": 0.5,
+                                "retrieval_type": "dense"
+                            })
+                except Exception as inner_e:
+                    logger.warning(f"Dense retrieval query failed for query '{q}': {inner_e}")
+        except Exception as e:
+            logger.error(f"DenseRetriever failed: {e}")
 
         return results
 
 
-class BM25Retriever:
-    """Stage 2: BM25 Lexical Keyword search across disk indices."""
+class PostgreSQLFTSRetriever:
+    """Stage 2: PostgreSQL Full-Text Search (Lexical Keyword Search)."""
     
     def __init__(self, k: int = 10):
         self.k = k
@@ -68,36 +85,69 @@ class BM25Retriever:
             return []
 
         results = []
-        tokenized_query = query.lower().split()
+        try:
+            from app.db.session import SessionLocal
+            from app.db.models import DocumentChunk
 
-        for doc_id in doc_ids:
-            bm25_file = os.path.join(BM25_DIR, f"{doc_id}.pkl")
-            if not os.path.exists(bm25_file):
-                continue
+            with SessionLocal() as db:
+                # 1. Primary PostgreSQL FTS query using tsvector and websearch_to_tsquery
+                try:
+                    ts_query = func.websearch_to_tsquery('english', query)
+                    rank_func = func.ts_rank_cd(DocumentChunk.search_vector, ts_query)
 
-            try:
-                with open(bm25_file, "rb") as f:
-                    data = pickle.load(f)
+                    chunks = db.query(DocumentChunk, rank_func.label("rank")).filter(
+                        DocumentChunk.doc_id.in_(doc_ids),
+                        DocumentChunk.search_vector.op("@@")(ts_query)
+                    ).order_by(rank_func.desc()).limit(self.k).all()
 
-                bm25 = data["bm25"]
-                texts = data["texts"]
-                metadatas = data["metadatas"]
-
-                scores = bm25.get_scores(tokenized_query)
-                top_indices = np.argsort(scores)[::-1][:self.k]
-
-                for idx in top_indices:
-                    if scores[idx] > 0:
+                    for chunk_row, rank in chunks:
+                        meta = chunk_row.metadata_json or {
+                            "doc_id": chunk_row.doc_id,
+                            "page": chunk_row.page,
+                            "chunk_idx": chunk_row.chunk_idx,
+                            "chunk_id": chunk_row.chunk_id,
+                            "parent_section": chunk_row.parent_section
+                        }
                         results.append({
-                            "content": texts[idx],
-                            "metadata": metadatas[idx],
-                            "score": float(scores[idx]),
-                            "retrieval_type": "bm25"
+                            "content": chunk_row.content,
+                            "metadata": meta,
+                            "score": float(rank) if rank else 0.5,
+                            "retrieval_type": "lexical"
                         })
-            except Exception as e:
-                pass
+                except Exception as fts_err:
+                    logger.warning(f"PostgreSQL FTS query failed, using ILIKE fallback: {fts_err}")
+                    # Fallback ILIKE text search if FTS query encounters error
+                    words = [w for w in query.lower().split() if len(w) > 2]
+                    if words:
+                        from sqlalchemy import or_
+                        filters = [DocumentChunk.content.ilike(f"%{w}%") for w in words[:3]]
+                        chunks = db.query(DocumentChunk).filter(
+                            DocumentChunk.doc_id.in_(doc_ids),
+                            or_(*filters)
+                        ).limit(self.k).all()
+
+                        for chunk_row in chunks:
+                            meta = chunk_row.metadata_json or {
+                                "doc_id": chunk_row.doc_id,
+                                "page": chunk_row.page,
+                                "chunk_idx": chunk_row.chunk_idx,
+                                "chunk_id": chunk_row.chunk_id,
+                                "parent_section": chunk_row.parent_section
+                            }
+                            results.append({
+                                "content": chunk_row.content,
+                                "metadata": meta,
+                                "score": 0.4,
+                                "retrieval_type": "lexical"
+                            })
+        except Exception as e:
+            logger.error(f"PostgreSQLFTSRetriever failed: {e}")
 
         return results
+
+
+# Backward compatibility alias
+BM25Retriever = PostgreSQLFTSRetriever
 
 
 class ReciprocalRankFusion:

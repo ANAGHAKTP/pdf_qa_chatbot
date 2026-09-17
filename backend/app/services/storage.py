@@ -65,12 +65,18 @@ class S3StorageService(StorageService):
         # Initialize boto3 S3 client lazily so that backend starts even if boto3 is not configured
         try:
             import boto3
-            self.s3 = boto3.client(
-                "s3",
-                aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
-                aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
-                region_name=settings.AWS_REGION
-            )
+            from botocore.config import Config
+            client_kwargs = {
+                "service_name": "s3",
+                "aws_access_key_id": settings.AWS_ACCESS_KEY_ID,
+                "aws_secret_access_key": settings.AWS_SECRET_ACCESS_KEY,
+                "region_name": settings.AWS_REGION or "us-east-1",
+                "config": Config(s3={"addressing_style": "path"})
+            }
+            if settings.AWS_S3_ENDPOINT_URL:
+                client_kwargs["endpoint_url"] = settings.AWS_S3_ENDPOINT_URL
+
+            self.s3 = boto3.client(**client_kwargs)
         except ImportError:
             self.s3 = None
         self.bucket = settings.AWS_BUCKET_NAME

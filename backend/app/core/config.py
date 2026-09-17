@@ -38,9 +38,10 @@ class Settings(BaseSettings):
     REDIS_PORT: int = 6379
     REDIS_PASSWORD: str = ""
 
-    # Chroma
-    CHROMADB_HOST: str = "localhost"
-    CHROMADB_PORT: int = 8000
+    # Qdrant Vector DB
+    QDRANT_URL: str = os.getenv("QDRANT_URL", "")
+    QDRANT_API_KEY: str = os.getenv("QDRANT_API_KEY", "")
+    QDRANT_COLLECTION: str = "docmind_chunks"
 
     # JWT Authentication
     JWT_SECRET: str = "428f526b1c54b2b6279bc90666bbdbf472851cf57cd8746b107bc5a4b7eb25ff"
@@ -95,6 +96,7 @@ class Settings(BaseSettings):
     DATA_DIR: str = os.getenv("DATA_DIR", "./data")
     USE_S3: bool = False
     UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", os.path.join(os.getenv("DATA_DIR", "./data"), "uploads"))
+    AWS_S3_ENDPOINT_URL: str = os.getenv("AWS_S3_ENDPOINT_URL", "")
     AWS_BUCKET_NAME: str = "docmind-enterprise-bucket"
     AWS_ACCESS_KEY_ID: str = ""
     AWS_SECRET_ACCESS_KEY: str = ""

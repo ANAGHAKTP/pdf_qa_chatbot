@@ -2,7 +2,7 @@ import os
 import pickle
 from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass, field
-from app.ai.common import load_parent_content, PARENTS_DIR
+from app.ai.common import load_parent_content
 
 @dataclass
 class ContextChunk:

@@ -1,8 +1,8 @@
-import os
+import io
 import json
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, BackgroundTasks, status, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.api import deps
@@ -10,7 +10,6 @@ from app.db.session import get_db
 from app.db.models import User
 from app.schemas.document import FolderCreate, FolderResponse, DocumentResponse, DocumentRename, FolderContentsResponse
 from app.services.document import DocumentService
-from app.ai.ingestion.pipeline import METADATA_DIR
 
 router = APIRouter()
 
@@ -50,17 +49,12 @@ def get_folder_contents(
             
     folders, docs = doc_service.get_contents(user_id=current_user.id, folder_id=parent_id)
 
-    # Attach enriched metadata dict if available
+    # Attach enriched metadata dict if available in DB
     enriched_docs = []
     for d in docs:
         d_dict = DocumentResponse.model_validate(d).model_dump()
-        meta_path = os.path.join(METADATA_DIR, f"{d.id}.json")
-        if os.path.exists(meta_path):
-            try:
-                with open(meta_path, "r") as f:
-                    d_dict["doc_metadata"] = json.load(f)
-            except Exception:
-                pass
+        if getattr(d, "doc_metadata", None):
+            d_dict["doc_metadata"] = d.doc_metadata
         enriched_docs.append(d_dict)
 
     return {
@@ -122,13 +116,8 @@ def get_document_metadata(
     if not doc or doc.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Document not found or access denied")
 
-    meta_path = os.path.join(METADATA_DIR, f"{id}.json")
-    if os.path.exists(meta_path):
-        try:
-            with open(meta_path, "r") as f:
-                return json.load(f)
-        except Exception:
-            pass
+    if getattr(doc, "doc_metadata", None):
+        return doc.doc_metadata
 
     return {
         "doc_id": id,
@@ -156,10 +145,15 @@ def preview_document_page(
     if not doc or doc.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Document not found or access denied")
 
-    if os.path.exists(doc.filepath):
-        return FileResponse(doc.filepath, media_type="application/pdf", filename=doc.filename)
-
-    raise HTTPException(status_code=404, detail="Document file content not found on server")
+    try:
+        file_bytes = doc_service.storage.get_file_bytes(doc.filepath)
+        return StreamingResponse(
+            io.BytesIO(file_bytes),
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'inline; filename="{doc.filename}"'}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=f"Document file content not found on server: {e}")
 
 
 @router.put("/{id}/rename", response_model=DocumentResponse)
@@ -184,13 +178,32 @@ def rename_document(
     return updated_doc
 
 
+@router.post("/{id}/reindex", response_model=DocumentResponse)
+def reindex_document(
+    id: int,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(deps.get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """Re-trigger background ingestion and indexing for a document."""
+    doc_service = DocumentService(db)
+    doc = doc_service.doc_repo.get_by_id(id)
+    if not doc or doc.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Document not found or access denied")
+
+    file_bytes = doc_service.storage.get_file_bytes(doc.filepath)
+    doc = doc_service.doc_repo.update_status(id, "indexing", 0)
+    background_tasks.add_task(doc_service._process_document, id, file_bytes)
+    return doc
+
+
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_document(
     id: int,
     current_user: User = Depends(deps.get_current_active_user),
     db: Session = Depends(get_db)
 ):
-    """Delete a document from database, storage, and Chroma vector store."""
+    """Delete a document from database, storage, and Qdrant vector store."""
     doc_service = DocumentService(db)
     success = doc_service.delete_document(doc_id=id, user_id=current_user.id)
     if not success:

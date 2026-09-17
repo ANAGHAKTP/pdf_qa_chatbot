@@ -9,13 +9,10 @@ import numpy as np
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_nvidia_ai_endpoints import NVIDIAEmbeddings, ChatNVIDIA
-from langchain_chroma import Chroma
-from rank_bm25 import BM25Okapi
-
 from app.core.config import settings
-from app.ai.common import get_chroma_client, load_parent_content, PARENTS_DIR, BM25_DIR
+from app.ai.common import get_qdrant_client, load_parent_content
 from app.ai.query_processor import QueryProcessor, ProcessedQuery
-from app.ai.retriever import DenseRetriever, BM25Retriever, ReciprocalRankFusion, CrossEncoderReranker
+from app.ai.retriever import DenseRetriever, BM25Retriever, PostgreSQLFTSRetriever, ReciprocalRankFusion, CrossEncoderReranker
 from app.ai.context_builder import ContextBuilder, ContextResult
 from app.ai.citation_engine import CitationEngine, CitationItem
 from app.ai.confidence import ConfidenceEstimator, ConfidenceReport, ConfidenceLevel
@@ -33,32 +30,32 @@ def ingest_document_pipeline(doc_id: int, file_bytes: bytes, filename: str = "do
 
 
 def remove_document_embeddings(doc_id: int):
-    """Deletes document chunks from ChromaDB and disk indices."""
+    """Deletes document chunks from Qdrant Cloud and PostgreSQL database."""
+    # 1. Qdrant point deletion
     try:
-        vectorstore = get_chroma_client()
-        vectorstore.delete(where={"doc_id": doc_id})
+        vectorstore = get_qdrant_client()
+        from qdrant_client.http import models
+        vectorstore.client.delete(
+            collection_name=getattr(settings, "QDRANT_COLLECTION", "docmind_chunks"),
+            points_selector=models.FilterSelector(
+                filter=models.Filter(
+                    must=[models.FieldCondition(key="metadata.doc_id", match=models.MatchValue(value=doc_id))]
+                )
+            )
+        )
     except Exception as e:
-        logger.warning(f"Chroma deletion error: {e}")
+        logger.warning(f"Qdrant deletion error for doc {doc_id}: {e}")
 
-    parent_file = os.path.join(PARENTS_DIR, f"{doc_id}.pkl")
-    bm25_file = os.path.join(BM25_DIR, f"{doc_id}.pkl")
-    if os.path.exists(parent_file):
-        os.remove(parent_file)
-    if os.path.exists(bm25_file):
-        os.remove(bm25_file)
-
-
-def load_parent_content(doc_id: int, page_num: int) -> str:
-    """Loads full parent page text from disk cache."""
-    parent_file = os.path.join(PARENTS_DIR, f"{doc_id}.pkl")
-    if os.path.exists(parent_file):
-        try:
-            with open(parent_file, "rb") as f:
-                pages = pickle.load(f)
-            return pages.get(str(page_num), "")
-        except Exception:
-            pass
-    return ""
+    # 2. Database cleanup of DocumentChunk and DocumentPage rows
+    try:
+        from app.db.session import SessionLocal
+        from app.db.models import DocumentChunk, DocumentPage
+        with SessionLocal() as db:
+            db.query(DocumentChunk).filter(DocumentChunk.doc_id == doc_id).delete(synchronize_session=False)
+            db.query(DocumentPage).filter(DocumentPage.doc_id == doc_id).delete(synchronize_session=False)
+            db.commit()
+    except Exception as db_err:
+        logger.warning(f"DB chunk/page deletion error for doc {doc_id}: {db_err}")
 
 
 # ── AI Answer Pipeline & Orchestration ────────────────────────────────────────

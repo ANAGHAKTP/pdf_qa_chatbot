@@ -1,50 +1,87 @@
 import os
-import pickle
+import logging
+from typing import Optional
+from sqlalchemy.orm import Session
 from app.core.config import settings
 
-DATA_DIR = os.getenv("DATA_DIR", getattr(settings, "DATA_DIR", "./data"))
-PARENTS_DIR = os.path.join(DATA_DIR, "parents")
-BM25_DIR = os.path.join(DATA_DIR, "bm25")
-os.makedirs(PARENTS_DIR, exist_ok=True)
-os.makedirs(BM25_DIR, exist_ok=True)
+logger = logging.getLogger(__name__)
 
 
-def get_chroma_client():
-    """Connects to local ChromaDB running standalone or client."""
+def get_embeddings():
     if os.getenv("DB_NAME") == "docmind_test" or not settings.NVIDIA_API_KEY or "your-actual" in settings.NVIDIA_API_KEY:
         from langchain_core.embeddings import FakeEmbeddings
-        embeddings = FakeEmbeddings(size=1024)
+        return FakeEmbeddings(size=1024)
     else:
         from langchain_nvidia_ai_endpoints import NVIDIAEmbeddings
-        embeddings = NVIDIAEmbeddings(
+        return NVIDIAEmbeddings(
             model=settings.EMBEDDING_MODEL,
             api_key=settings.NVIDIA_API_KEY
         )
-    
-    if os.getenv("CHROMADB_HOST") in [None, "localhost", "127.0.0.1"]:
-        from langchain_chroma import Chroma
-        chroma_dir = os.path.join(DATA_DIR, "chroma_db")
-        return Chroma(
-            persist_directory=chroma_dir,
-            embedding_function=embeddings
+
+
+def get_qdrant_client():
+    """Connects to Qdrant Cloud cluster or in-memory Qdrant instance for testing."""
+    import qdrant_client
+    from langchain_qdrant import QdrantVectorStore
+
+    embeddings = get_embeddings()
+    collection_name = getattr(settings, "QDRANT_COLLECTION", "docmind_chunks")
+
+    if settings.QDRANT_URL:
+        client = qdrant_client.QdrantClient(
+            url=settings.QDRANT_URL,
+            api_key=settings.QDRANT_API_KEY
         )
     else:
-        from langchain_chroma import Chroma
-        from chromadb import HttpClient
-        return Chroma(
-            client=HttpClient(host=settings.CHROMADB_HOST, port=settings.CHROMADB_PORT),
-            embedding_function=embeddings
+        # Fallback to local in-memory instance for testing/local execution without Qdrant Cloud credentials
+        client = qdrant_client.QdrantClient(location=":memory:")
+
+    # Ensure collection exists
+    from qdrant_client.http import models
+    try:
+        client.get_collection(collection_name=collection_name)
+    except Exception:
+        client.create_collection(
+            collection_name=collection_name,
+            vectors_config=models.VectorParams(
+                size=1024,
+                distance=models.Distance.COSINE
+            )
         )
 
+    return QdrantVectorStore(
+        client=client,
+        collection_name=collection_name,
+        embedding=embeddings
+    )
 
-def load_parent_content(doc_id: int, page_num: int) -> str:
-    """Loads full parent page text from disk cache."""
-    parent_file = os.path.join(PARENTS_DIR, f"{doc_id}.pkl")
-    if os.path.exists(parent_file):
+
+def load_parent_content(doc_id: int, page_num: int, db: Optional[Session] = None) -> str:
+    """Loads full parent page text from database or optional session."""
+    if db is not None:
         try:
-            with open(parent_file, "rb") as f:
-                pages = pickle.load(f)
-            return pages.get(str(page_num), "")
-        except Exception:
-            pass
+            from app.db.models import DocumentPage
+            page_obj = db.query(DocumentPage).filter(
+                DocumentPage.doc_id == doc_id,
+                DocumentPage.page_num == page_num
+            ).first()
+            if page_obj and page_obj.text:
+                return page_obj.text
+        except Exception as e:
+            logger.warning(f"Could not load page from DB: {e}")
+
+    # Standalone query fallback if db session was not passed
+    try:
+        from app.db.session import SessionLocal
+        with SessionLocal() as session:
+            from app.db.models import DocumentPage
+            page_obj = session.query(DocumentPage).filter(
+                DocumentPage.doc_id == doc_id,
+                DocumentPage.page_num == page_num
+            ).first()
+            if page_obj and page_obj.text:
+                return page_obj.text
+    except Exception:
+        pass
+
     return ""

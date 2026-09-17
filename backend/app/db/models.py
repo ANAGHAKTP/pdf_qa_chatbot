@@ -102,12 +102,48 @@ class Document(Base):
     chunk_count = Column(Integer, default=0)
     status = Column(String, default="indexing")  # indexing, ready, failed
     s3_key = Column(String, nullable=True)
+    doc_metadata = Column(JSON, nullable=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     folder_id = Column(Integer, ForeignKey("folders.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     user = relationship("User", back_populates="documents")
     folder = relationship("Folder", back_populates="documents")
+    pages = relationship("DocumentPage", back_populates="document", cascade="all, delete-orphan")
+    chunks = relationship("DocumentChunk", back_populates="document", cascade="all, delete-orphan")
+
+
+class DocumentPage(Base):
+    __tablename__ = "document_pages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    doc_id = Column(Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
+    page_num = Column(Integer, nullable=False)
+    text = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        CheckConstraint('page_num >= 1', name='chk_page_num_positive'),
+    )
+
+    document = relationship("Document", back_populates="pages")
+
+
+class DocumentChunk(Base):
+    __tablename__ = "document_chunks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    doc_id = Column(Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
+    page = Column(Integer, nullable=False)
+    chunk_idx = Column(Integer, nullable=False)
+    chunk_id = Column(String, nullable=False, index=True)
+    content = Column(Text, nullable=False)
+    parent_section = Column(String, nullable=True)
+    metadata_json = Column("metadata", JSON, nullable=True)
+    search_vector = Column(Text, nullable=True)  # Populated with to_tsvector('english', content) in DB
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    document = relationship("Document", back_populates="chunks")
 
 
 class ChatSession(Base):
