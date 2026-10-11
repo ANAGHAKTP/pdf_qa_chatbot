@@ -24,8 +24,8 @@ if config.config_file_name is not None:
 # Configure metadata targets for autogenerate migrations
 target_metadata = Base.metadata
 
-# Inject the dynamic SQL Alchemy URI from environment settings
-config.set_main_option("sqlalchemy.url", settings.SQLALCHEMY_DATABASE_URI)
+# Inject the dynamic SQL Alchemy URI from environment settings (escape % for configparser interpolation)
+config.set_main_option("sqlalchemy.url", settings.SQLALCHEMY_DATABASE_URI.replace("%", "%%"))
 
 
 def run_migrations_offline() -> None:
