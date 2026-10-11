@@ -6,6 +6,7 @@ services:
     dockerfilePath: backend/Dockerfile
     dockerContext: backend
     plan: free
+    healthCheckPath: /health
     envVars:
       - key: RUNNING_IN_DOCKER
         value: "True"
