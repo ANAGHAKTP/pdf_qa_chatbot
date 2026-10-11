@@ -11,7 +11,7 @@ services:
       - key: RUNNING_IN_DOCKER
         value: "True"
       - key: USE_S3
-        value: "True"
+        value: "False"
       - key: AWS_S3_ENDPOINT_URL
         sync: false
       - key: AWS_ACCESS_KEY_ID
@@ -33,7 +33,7 @@ services:
       - key: CORS_ORIGINS
         value: "https://pdf-qa-chatbot-rho.vercel.app"
       - key: DATABASE_URL
-        sync: false # Set in Render Dashboard (e.g. Supabase connection string)
+        value: "postgresql://postgres.nhrtebrshgutjkydwcim:Anaghaktp%232004@aws-0-ap-south-1.pooler.supabase.com:5432/postgres"
       - key: REDIS_HOST
         value: "" # Optional Redis host (leave empty if not using Redis)
       - key: REDIS_PORT
