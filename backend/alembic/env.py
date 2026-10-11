@@ -8,7 +8,7 @@ from alembic import context
 sys.path.insert(0, os.path.realpath(os.path.join(os.path.dirname(__file__), '..')))
 
 from app.core.config import settings
-from app.db.session import Base
+from app.db.session import Base, engine
 # Import all database models to ensure they are registered on the Base metadata
 from app.db import models
 
@@ -30,7 +30,7 @@ config.set_main_option("sqlalchemy.url", settings.SQLALCHEMY_DATABASE_URI)
 
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode."""
-    url = config.get_main_option("sqlalchemy.url")
+    url = settings.SQLALCHEMY_DATABASE_URI
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -44,11 +44,8 @@ def run_migrations_offline() -> None:
 
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode."""
-    connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-    )
+    print(f"[Alembic] Connecting to database: {engine.url.render_as_string(hide_password=True)}")
+    connectable = engine
 
     with connectable.connect() as connection:
         context.configure(

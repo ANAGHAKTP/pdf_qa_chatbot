@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
 
     # Database
-    DATABASE_URL: Optional[str] = None
+    DATABASE_URL: Optional[str] = os.getenv("DATABASE_URL")
     DB_HOST: str = "localhost"
     DB_PORT: int = 5432
     DB_USER: str = "postgres"
@@ -26,11 +26,13 @@ class Settings(BaseSettings):
 
     @property
     def SQLALCHEMY_DATABASE_URI(self) -> str:
-        if self.DATABASE_URL:
+        db_url = self.DATABASE_URL or os.getenv("DATABASE_URL")
+        if db_url and db_url.strip():
+            db_url = db_url.strip()
             # SQLAlchemy requires postgresql:// protocol
-            if self.DATABASE_URL.startswith("postgres://"):
-                return self.DATABASE_URL.replace("postgres://", "postgresql://", 1)
-            return self.DATABASE_URL
+            if db_url.startswith("postgres://"):
+                return db_url.replace("postgres://", "postgresql://", 1)
+            return db_url
         return f"postgresql://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
 
     # Redis
