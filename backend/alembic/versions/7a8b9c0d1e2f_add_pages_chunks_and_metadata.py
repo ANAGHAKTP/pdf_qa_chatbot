@@ -20,47 +20,61 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    existing_tables = set(inspector.get_table_names())
+
     # 1. Add doc_metadata JSON column to documents table
-    op.add_column('documents', sa.Column('doc_metadata', sa.JSON(), nullable=True))
+    if 'documents' in existing_tables:
+        doc_cols = {col['name'] for col in inspector.get_columns('documents')}
+        if 'doc_metadata' not in doc_cols:
+            op.add_column('documents', sa.Column('doc_metadata', sa.JSON(), nullable=True))
 
     # 2. Create document_pages table
-    op.create_table(
-        'document_pages',
-        sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('doc_id', sa.Integer(), nullable=False),
-        sa.Column('page_num', sa.Integer(), nullable=False),
-        sa.Column('text', sa.Text(), nullable=False),
-        sa.Column('created_at', sa.DateTime(), nullable=True),
-        sa.CheckConstraint('page_num >= 1', name='chk_page_num_positive'),
-        sa.ForeignKeyConstraint(['doc_id'], ['documents.id'], ondelete='CASCADE'),
-        sa.PrimaryKeyConstraint('id'),
-        sa.UniqueConstraint('doc_id', 'page_num', name='uq_document_pages_doc_id_page_num')
-    )
-    op.create_index(op.f('ix_document_pages_doc_id'), 'document_pages', ['doc_id'], unique=False)
-    op.create_index(op.f('ix_document_pages_id'), 'document_pages', ['id'], unique=False)
+    if 'document_pages' not in existing_tables:
+        op.create_table(
+            'document_pages',
+            sa.Column('id', sa.Integer(), nullable=False),
+            sa.Column('doc_id', sa.Integer(), nullable=False),
+            sa.Column('page_num', sa.Integer(), nullable=False),
+            sa.Column('text', sa.Text(), nullable=False),
+            sa.Column('created_at', sa.DateTime(), nullable=True),
+            sa.CheckConstraint('page_num >= 1', name='chk_page_num_positive'),
+            sa.ForeignKeyConstraint(['doc_id'], ['documents.id'], ondelete='CASCADE'),
+            sa.PrimaryKeyConstraint('id'),
+            sa.UniqueConstraint('doc_id', 'page_num', name='uq_document_pages_doc_id_page_num')
+        )
+        op.create_index(op.f('ix_document_pages_doc_id'), 'document_pages', ['doc_id'], unique=False)
+        op.create_index(op.f('ix_document_pages_id'), 'document_pages', ['id'], unique=False)
 
     # 3. Create document_chunks table
-    op.create_table(
-        'document_chunks',
-        sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('doc_id', sa.Integer(), nullable=False),
-        sa.Column('page', sa.Integer(), nullable=False),
-        sa.Column('chunk_idx', sa.Integer(), nullable=False),
-        sa.Column('chunk_id', sa.String(), nullable=False),
-        sa.Column('content', sa.Text(), nullable=False),
-        sa.Column('parent_section', sa.String(), nullable=True),
-        sa.Column('metadata', sa.JSON(), nullable=True),
-        sa.Column('search_vector', postgresql.TSVECTOR(), nullable=True),
-        sa.Column('created_at', sa.DateTime(), nullable=True),
-        sa.ForeignKeyConstraint(['doc_id'], ['documents.id'], ondelete='CASCADE'),
-        sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_document_chunks_chunk_id'), 'document_chunks', ['chunk_id'], unique=False)
-    op.create_index(op.f('ix_document_chunks_doc_id'), 'document_chunks', ['doc_id'], unique=False)
-    op.create_index(op.f('ix_document_chunks_id'), 'document_chunks', ['id'], unique=False)
+    if 'document_chunks' not in existing_tables:
+        op.create_table(
+            'document_chunks',
+            sa.Column('id', sa.Integer(), nullable=False),
+            sa.Column('doc_id', sa.Integer(), nullable=False),
+            sa.Column('page', sa.Integer(), nullable=False),
+            sa.Column('chunk_idx', sa.Integer(), nullable=False),
+            sa.Column('chunk_id', sa.String(), nullable=False),
+            sa.Column('content', sa.Text(), nullable=False),
+            sa.Column('parent_section', sa.String(), nullable=True),
+            sa.Column('metadata', sa.JSON(), nullable=True),
+            sa.Column('search_vector', postgresql.TSVECTOR(), nullable=True),
+            sa.Column('created_at', sa.DateTime(), nullable=True),
+            sa.ForeignKeyConstraint(['doc_id'], ['documents.id'], ondelete='CASCADE'),
+            sa.PrimaryKeyConstraint('id')
+        )
+        op.create_index(op.f('ix_document_chunks_chunk_id'), 'document_chunks', ['chunk_id'], unique=False)
+        op.create_index(op.f('ix_document_chunks_doc_id'), 'document_chunks', ['doc_id'], unique=False)
+        op.create_index(op.f('ix_document_chunks_id'), 'document_chunks', ['id'], unique=False)
 
-    # 4. Create GIN index on search_vector column for PostgreSQL Full-Text Search
-    op.create_index('ik_document_chunks_search_vector', 'document_chunks', ['search_vector'], postgresql_using='gin')
+        # 4. Create GIN index on search_vector column for PostgreSQL Full-Text Search
+        if bind.dialect.name == 'postgresql':
+            op.create_index('ik_document_chunks_search_vector', 'document_chunks', ['search_vector'], postgresql_using='gin')
+    else:
+        chunk_indexes = {idx['name'] for idx in inspector.get_indexes('document_chunks')}
+        if 'ik_document_chunks_search_vector' not in chunk_indexes and bind.dialect.name == 'postgresql':
+            op.create_index('ik_document_chunks_search_vector', 'document_chunks', ['search_vector'], postgresql_using='gin')
 
 
 def downgrade() -> None:
